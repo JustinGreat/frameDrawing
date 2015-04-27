@@ -30,6 +30,10 @@ import json
     data_json=json.dumps(dic,ensure_ascii=False).encode('utf-8','ignore')
     f_out.write(data_json)
 '''
+opt_circum_min=0.08
+opt_circum_max=0.1
+opt_circum_min_2=0.03
+opt_circum_max_2=0.13
 def dist((x1,y1),(x2,y2)):
     return ((x2-x1)**2+(y2-y1)**2)**0.5
     
@@ -41,10 +45,12 @@ def Start():
         line_json=json.loads(line)
         dic[line_json[0][0]]={}
         dic[line_json[0][0]]['link']=[]
-        dic[line_json[0][0]]['pos']=line_json[1]
+        dic[line_json[0][0]]['circum']=0
+        dic[line_json[0][0]]['pos']=[line_json[1]]
         dic[line_json[0][0]]['frame']=line_json[2]
         dic[line_json[0][0]]['corner']=[]
         for i in range(len(line_json[2])):
+            dic[line_json[0][0]]['circum']+=dist((line_json[2][i%len(line_json[2])][0],line_json[2][i%len(line_json[2])][1]),(line_json[2][i%len(line_json[2])][2],line_json[2][i%len(line_json[2])][3]))
             ai=line_json[2][i%len(line_json[2])][2]-line_json[2][i%len(line_json[2])][0]
             bi=line_json[2][i%len(line_json[2])][3]-line_json[2][i%len(line_json[2])][1]
             aj=line_json[2][(i+1)%len(line_json[2])][2]-line_json[2][(i+1)%len(line_json[2])][0]
@@ -62,9 +68,9 @@ def Start():
 
     for item in dic:
         for other in dic:
-            if abs(dic[other]['pos'][0]-dic[item]['pos'][0])>0.1 and abs(dic[other]['pos'][1]-dic[item]['pos'][1])>0.1:
+            if abs(dic[other]['pos'][0][0]-dic[item]['pos'][0][0])>0.1 and abs(dic[other]['pos'][0][1]-dic[item]['pos'][0][1])>0.1:
                 continue
-            if dic[other]['pos']==dic[item]['pos']:
+            if dic[other]['pos'][0]==dic[item]['pos'][0]:
                 continue
             if other in dic[item]['link']:
                 continue
@@ -79,7 +85,57 @@ def Start():
                 dic[other]['link'].append(item)
             else:
                 continue 
-    
+    for item in dic.keys():
+        print "ITEM:%s"%item
+        if not (item in dic):
+            continue
+        if dic[item]['circum']>=opt_circum_min:
+            continue
+        if dic[item]['link']==[]:
+            continue
+        for key in dic[item]['link']:
+            print "item:%s,key:%s"%(item,key)
+            if dic[item]['link']==[]:
+                break
+            if key == item:
+                continue
+            if not (key in dic) or not (item in dic):
+                continue
+            if dic[item]['circum']+dic[key]['circum']>opt_circum_max_2:
+                break
+            if dic[item]['circum']+dic[key]['circum']>opt_circum_max:
+                break
+            if dic[item]['circum']+dic[key]['circum']<opt_circum_min:
+                dic[item]['circum']+=dic[key]['circum']
+                print "mergeBefore"
+                print dic[item]['link']
+                print dic[key]['link']
+                dic[item]['link']+=dic[key]['link']
+                dic[item]['link']=list(set(dic[item]['link']))
+                print "merge"
+                print dic[item]['link']
+                try:
+                    dic[item]['link'].remove(item)
+                except:
+                    pass
+                try:
+                    dic[item]['link'].remove(key)
+                except:
+                    pass
+                print "adjust"
+                print dic[item]['link']
+                for d_key in dic[key]['link']:
+                    try:
+                        dic[d_key]['link'].remove(key)
+                    except:
+                        pass
+                dic[item]['pos']+=dic[key]['pos']
+                dic[item]['corner'].append(dic[key]['corner'])
+                dic[item]['frame'].append(dic[key]['frame'])
+                del dic[key]
+                print dic[item]['link']
+                print "item:%s,circum:%f"%(item,dic[item]['circum'])
+            
     data_json=json.dumps(dic,ensure_ascii=False).encode('utf-8','ignore')
     f_out.write(data_json)
 
