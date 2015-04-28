@@ -86,7 +86,7 @@ def Start():
             else:
                 continue 
     for item in dic.keys():
-        print "ITEM:%s"%item
+      #  print "ITEM:%s"%item
         if not (item in dic):
             continue
         if dic[item]['circum']>=opt_circum_min:
@@ -94,7 +94,7 @@ def Start():
         if dic[item]['link']==[]:
             continue
         for key in dic[item]['link']:
-            print "item:%s,key:%s"%(item,key)
+#            print "item:%s,key:%s"%(item,key)
             if dic[item]['link']==[]:
                 break
             if key == item:
@@ -105,15 +105,15 @@ def Start():
                 break
             if dic[item]['circum']+dic[key]['circum']>opt_circum_max:
                 break
-            if dic[item]['circum']+dic[key]['circum']<opt_circum_min:
+            if dic[item]['circum']+dic[key]['circum']<opt_circum_max:
                 dic[item]['circum']+=dic[key]['circum']
-                print "mergeBefore"
-                print dic[item]['link']
-                print dic[key]['link']
+#                print "mergeBefore"
+ #               print dic[item]['link']
+  #              print dic[key]['link']
                 dic[item]['link']+=dic[key]['link']
                 dic[item]['link']=list(set(dic[item]['link']))
-                print "merge"
-                print dic[item]['link']
+   #             print "merge"
+    #            print dic[item]['link']
                 try:
                     dic[item]['link'].remove(item)
                 except:
@@ -122,19 +122,51 @@ def Start():
                     dic[item]['link'].remove(key)
                 except:
                     pass
-                print "adjust"
-                print dic[item]['link']
+     #           print "adjust"
+      #          print dic[item]['link']
                 for d_key in dic[key]['link']:
                     try:
                         dic[d_key]['link'].remove(key)
                     except:
                         pass
                 dic[item]['pos']+=dic[key]['pos']
-                dic[item]['corner'].append(dic[key]['corner'])
-                dic[item]['frame'].append(dic[key]['frame'])
+
+                minDis=1
+                pcorner=[]
+                qcorner=[]
+                for p in range(len(dic[item]['frame'])):
+                    minDis=1    
+                    for q in range(len(dic[key]['frame'])):
+                        minDis=min(dist((dic[key]['frame'][q][0],dic[key]['frame'][q][1]),(dic[item]['frame'][p][0],dic[item]['frame'][p][1])),minDis)
+
+                        if minDis < 0.001 and (dic[key]['frame'][q][0],dic[key]['frame'][q][0]) in dic[key]['corner']:
+                            if not (dic[key]['frame'][q][0],dic[key]['frame'][q][1]) in qcorner:
+                                qcorner.append((dic[key]['frame'][q][0],dic[key]['frame']))
+                        if minDis < 0.001 and (dic[item]['frame'][p][0],dic[item]['frame'][p][1]) in dic[item]['corner']:
+                            if not (dic[item]['frame'][p][0],dic[item]['frame'][p][1]) in pcorner:
+                                pcorner.append((dic[item]['frame'][p][0],dic[item]['frame'][p][1]))    
+
+                    if minDis > 0.001:
+                        pstart=p
+                pcur=pstart
+                for p in range(len(dic[item]['frame'])):
+                    minDis=1.0
+                    pcur=(p+pstart)%len(dic[item]['frame'])
+                    if (dic[item]['frame'][pcur][0],dic[item]['frame'][pcur][1]) in pcorner :
+                        qpos=0xff
+                        for q in range(len(qcorner)):
+                            pdist=dist((dic[item]['frame'][pcur][0],(dic[item]['frame'][pcur][1]),(q[0],q[1])))
+                            if pdist<minDis:
+                                minDis=pdist
+                                qpos=q
+                        if qpos!=0xff:                     
+                            dic[item]['frame'].append([dic[item]['frame'][pcur][0],dic[item]['frame'][pcur][1],qcorner[qpos][0],qcorner[qpos][1]]) 
+
+                dic[item]['frame']+=dic[key]['frame']
+                dic[item]['corner']+=dic[key]['corner']
                 del dic[key]
-                print dic[item]['link']
-                print "item:%s,circum:%f"%(item,dic[item]['circum'])
+        #        print dic[item]['link']
+       #         print "item:%s,circum:%f"%(item,dic[item]['circum'])
             
     data_json=json.dumps(dic,ensure_ascii=False).encode('utf-8','ignore')
     f_out.write(data_json)
