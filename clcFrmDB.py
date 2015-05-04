@@ -40,15 +40,23 @@ def dist((x1,y1),(x2,y2)):
 def Start():
     dic={}
     client,db,posts=Connect2Mongo("localhost",27017,"drawFrame","raw_frame_test")
+    client4,db4,posts4=Connect2Mongo("localhost",27017,"drawFrame","raw_poi")
+    # Begin to get data
     for line in posts.find():
         line_json=line['data']
         dic[line_json[0][0]]={}
+        print line_json[0][0]
+        poi_json=posts4.find_one({"_id":line_json[0][0]})
+        print poi_json
+        dic[line_json[0][0]]['poi']=[]
+        dic[line_json[0][0]]['poi']+=poi_json['poi']
         dic[line_json[0][0]]['link']=[]
         dic[line_json[0][0]]['circum']=0
         dic[line_json[0][0]]['pos']=[line_json[1]]
         dic[line_json[0][0]]['frame']=[]
         dic[line_json[0][0]]['frame'].append(line_json[2][0])
         dic[line_json[0][0]]['corner']=[]
+    #Find corners and judge which zone the poi is in.
         for i in range(len(line_json[2][0])):
             dic[line_json[0][0]]['circum']+=dist((line_json[2][0][i%len(line_json[2][0])][0],line_json[2][0][i%len(line_json[2][0])][1]),(line_json[2][0][i%len(line_json[2][0])][2],line_json[2][0][i%len(line_json[2][0])][3]))
             ai=line_json[2][0][i%len(line_json[2][0])][2]-line_json[2][0][i%len(line_json[2][0])][0]
@@ -65,10 +73,10 @@ def Start():
             except:
                 continue
             dic[line_json[0][0]]['corner'].append((line_json[2][i%len(line_json[2])][2],line_json[2][i%len(line_json[2])][3]))
-
+    #Begin to find the zones nearby
     for item in dic:
         for other in dic:
-            if abs(dic[other]['pos'][0][0]-dic[item]['pos'][0][0])>0.02 and abs(dic[other]['pos'][0][1]-dic[item]['pos'][0][1])>0.02:
+            if abs(dic[other]['pos'][0][0]-dic[item]['pos'][0][0])>0.02 or abs(dic[other]['pos'][0][1]-dic[item]['pos'][0][1])>0.02:
                 continue
             if dic[other]['pos'][0]==dic[item]['pos'][0]:
                 continue
@@ -84,7 +92,8 @@ def Start():
                 dic[item]['link'].append(other)
                 dic[other]['link'].append(item)
             else:
-                continue 
+                continue
+    # Begin to merge the nearby zones          
     for item in dic.keys():
       #  print "ITEM:%s"%item
         if not (item in dic):
@@ -101,10 +110,11 @@ def Start():
                 continue
             if not (key in dic) or not (item in dic):
                 continue
+            
             if dic[item]['circum']+dic[key]['circum']>opt_circum_max_2:
-                break
+                continue
             if dic[item]['circum']+dic[key]['circum']>opt_circum_max:
-                break
+                continue
             if dic[item]['circum']+dic[key]['circum']<opt_circum_max:
                 dic[item]['circum']+=dic[key]['circum']
 #                print "mergeBefore"
@@ -130,10 +140,57 @@ def Start():
                     except:
                         pass
                 dic[item]['pos']+=dic[key]['pos']
-                dic[item]['frame'].append(dic[key]['frame'][0])
+                dic[item]['frame']+=dic[key]['frame']
                 dic[item]['corner']+=dic[key]['corner']
                 del dic[key]
+    
+    for item in dic.keys():
+        if dic.get(item,'')=='':
+            continue
 
+        if dic[item]['circum']<0.03:
+            print "item"
+            print dic[item]['circum']
+            print 'link'
+            for key2 in dic[item]['link']:
+                if dic.get(key2,'')=='':
+                    continue
+                if dic[item]['link']==[]:
+                    break
+                if key2 == item:
+                    continue
+                print dic[key2]['circum']
+            print ''
+            for key in dic[item]['link']:
+                if dic.get(key,'')=='':
+                    continue
+                if dic[item]['link']==[]:
+                    break
+                if key == item:
+                    continue
+                if dic[item]['circum']+dic[key]['circum']>opt_circum_max_2:
+                    continue
+                if dic[item]['circum']+dic[key]['circum']<opt_circum_max_2:
+                    dic[item]['circum']+=dic[key]['circum']
+                    dic[item]['link']+=dic[key]['link']
+                    dic[item]['link']=list(set(dic[item]['link']))
+                    try:
+                        dic[item]['link'].remove(item)
+                    except:
+                        pass
+                    try:
+                        dic[item]['link'].remove(key)
+                    except:
+                        pass
+                    for d_key in dic[key]['link']:
+                        try:
+                            dic[d_key]['link'].remove(key)
+                        except:
+                            pass
+                    dic[item]['pos']+=dic[key]['pos']
+                    dic[item]['frame']+=dic[key]['frame']
+                    dic[item]['corner']+=dic[key]['corner']
+                    del dic[key]
                 '''
                 minDis=1
                 pcorner=[]
@@ -166,9 +223,12 @@ def Start():
                         #if qpos!=0xff:                     
                             #dic[item]['frame'].append([dic[item]['frame'][pcur][0],dic[item]['frame'][pcur][1],qcorner[qpos][0],qcorner[qpos][1]]) 
                 '''
+    
         #        print dic[item]['link']
        #         print "item:%s,circum:%f"%(item,dic[item]['circum'])
+    # Begin to store data
     client2,db2,posts2=Connect2Mongo('localhost',27017,'drawFrame','bj_frame_test')
+    posts2.drop()
     for frm in dic:
         json_dic={}
         json_dic['_id']=frm
