@@ -30,25 +30,31 @@ import json
     data_json=json.dumps(dic,ensure_ascii=False).encode('utf-8','ignore')
     f_out.write(data_json)
 '''
+'''opt distance'''
 opt_circum_min=0.08
 opt_circum_max=0.1
 opt_circum_min_2=0.03
 opt_circum_max_2=0.13
+
+
+'''Calc the dist between (x1,y1) and (x2,y2). unit:lon&lat degree'''
 def dist((x1,y1),(x2,y2)):
     return ((x2-x1)**2+(y2-y1)**2)**0.5
     
 def Start():
-    f_in=open("region_level_1_test",'r')
+    '''Reading datas and organising the data into a dict'''
+    f_in=open("region_level_1",'r')
     f_out=open("format_reg.txt",'w')
     dic={}
     for line in f_in.readlines():
         line_json=json.loads(line)
         dic[line_json[0][0]]={}
-        dic[line_json[0][0]]['link']=[]
-        dic[line_json[0][0]]['circum']=0
-        dic[line_json[0][0]]['pos']=[line_json[1]]
-        dic[line_json[0][0]]['frame']=line_json[2]
-        dic[line_json[0][0]]['corner']=[]
+        dic[line_json[0][0]]['link']=[]             #the frame nearby
+        dic[line_json[0][0]]['circum']=0            #circumference
+        dic[line_json[0][0]]['pos']=[line_json[1]]  #position of the conponent
+        dic[line_json[0][0]]['frame']=line_json[2]  #frame lines
+        dic[line_json[0][0]]['corner']=[]           #frame corner
+        '''Finding corner:Degree > 45'''
         for i in range(len(line_json[2])):
             dic[line_json[0][0]]['circum']+=dist((line_json[2][i%len(line_json[2])][0],line_json[2][i%len(line_json[2])][1]),(line_json[2][i%len(line_json[2])][2],line_json[2][i%len(line_json[2])][3]))
             ai=line_json[2][i%len(line_json[2])][2]-line_json[2][i%len(line_json[2])][0]
@@ -60,15 +66,16 @@ def Start():
             aj*=1000000
             bj*=1000000
             try:
-                if abs((ai*bj-aj*bi)/(((ai**2+bi**2)**0.5)*((aj**2+bj**2)**0.5)))<0.707:
+                if abs((ai*bj-aj*bi)/(((ai**2+bi**2)**0.5)*((aj**2+bj**2)**0.5)))<0.707:                                 #aXb=|a||b|sin(angle)
                     continue
             except:
                 continue
             dic[line_json[0][0]]['corner'].append((line_json[2][i%len(line_json[2])][2],line_json[2][i%len(line_json[2])][3]))
 
+    '''Finding frames close to the Frame '''
     for item in dic:
         for other in dic:
-            if abs(dic[other]['pos'][0][0]-dic[item]['pos'][0][0])>0.1 and abs(dic[other]['pos'][0][1]-dic[item]['pos'][0][1])>0.1:
+            if abs(dic[other]['pos'][0][0]-dic[item]['pos'][0][0])>0.02 and abs(dic[other]['pos'][0][1]-dic[item]['pos'][0][1])>0.02:
                 continue
             if dic[other]['pos'][0]==dic[item]['pos'][0]:
                 continue
@@ -85,6 +92,8 @@ def Start():
                 dic[other]['link'].append(item)
             else:
                 continue 
+
+    '''Merge the conponents linked into one.  Condition:sum of circum < 10 km(0.1)'''
     for item in dic.keys():
       #  print "ITEM:%s"%item
         if not (item in dic):
@@ -130,7 +139,7 @@ def Start():
                     except:
                         pass
                 dic[item]['pos']+=dic[key]['pos']
-
+                '''Draw the merged conponents' lines'''
                 minDis=1
                 pcorner=[]
                 qcorner=[]
@@ -167,7 +176,7 @@ def Start():
                 del dic[key]
         #        print dic[item]['link']
        #         print "item:%s,circum:%f"%(item,dic[item]['circum'])
-            
+    '''Output the result'''
     data_json=json.dumps(dic,ensure_ascii=False).encode('utf-8','ignore')
     f_out.write(data_json)
 
