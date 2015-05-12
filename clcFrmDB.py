@@ -3,6 +3,7 @@
 import pickle
 import json
 from util import *
+import math
 
 ERROR='0'
 RIGHT='1'
@@ -13,6 +14,8 @@ opt_circum_min_2=0.03
 opt_circum_max_2=0.13
 opt_poi_max=320
 opt_poi_max_2=400
+blk_size=0.002
+line_num=100
 '''
 class Roadmap:
     def __init__(self):
@@ -156,6 +159,10 @@ def Start():
     client,db,posts=Connect2Mongo("localhost",27017,"drawFrame","raw_frame_test")
     client4,db4,posts4=Connect2Mongo("localhost",27017,"drawFrame","raw_poi")
     # Begin to get data
+    min_pos_x=116.0
+    min_pos_y=40.0
+    max_pos_x=116.0
+    max_pos_y=40.0
     for line in posts.find():
         line_json=line['data']
         dic[line_json[0][0]]={}
@@ -164,47 +171,49 @@ def Start():
         dic[line_json[0][0]]['poi']+=poi_json['poi']
         dic[line_json[0][0]]['poi_num']=len(dic[line_json[0][0]]['poi'])
         dic[line_json[0][0]]['link']=[]
-        dic[line_json[0][0]]['circum']=0
+        dic[line_json[0][0]]['circum']=0.0
         dic[line_json[0][0]]['pos']=[line_json[1]]
         dic[line_json[0][0]]['frame']=[]
         dic[line_json[0][0]]['frame'].append(line_json[2][0])
-        dic[line_json[0][0]]['corner']=[]
-        for i in range(len(line_json[2][0])):
-            dic[line_json[0][0]]['circum']+=dist((line_json[2][0][i%len(line_json[2][0])][0],line_json[2][0][i%len(line_json[2][0])][1]),(line_json[2][0][i%len(line_json[2][0])][2],line_json[2][0][i%len(line_json[2][0])][3]))
-            ai=line_json[2][0][i%len(line_json[2][0])][2]-line_json[2][0][i%len(line_json[2][0])][0]
-            bi=line_json[2][0][i%len(line_json[2][0])][3]-line_json[2][0][i%len(line_json[2][0])][1]
-            aj=line_json[2][0][(i+1)%len(line_json[2][0])][2]-line_json[2][0][(i+1)%len(line_json[2][0])][0]
-            bj=line_json[2][0][(i+1)%len(line_json[2][0])][3]-line_json[2][0][(i+1)%len(line_json[2][0])][1]
-            ai*=1000000
-            bi*=1000000
-            aj*=1000000
-            bj*=1000000
-            try:
-                if abs((ai*bj-aj*bi)/(((ai**2+bi**2)**0.5)*((aj**2+bj**2)**0.5)))<0.707:
-                    continue
-            except:
-                continue
-            dic[line_json[0][0]]['corner'].append((line_json[2][i%len(line_json[2])][2],line_json[2][i%len(line_json[2])][3]))
-    #Begin to find the zones nearby
+        dic[line_json[0][0]]['index']=[]
+        if line_json[1][0]<min_pos_x:
+            min_pos_x=line_json[1][0]
+        if line_json[1][0]>max_pos_x:
+            max_pos_x=line_json[1][0]
+        if line_json[1][1]<min_pos_y:
+            min_pos_y=line_json[1][1]
+        if line_json[1][1]>max_pos_y:
+            max_pos_y=line_json[1][1]
+    map_index=[[[] for i in range(int(math.ceil((max_pos_x-min_pos_x)/blk_size+100)))] for j in range(int(math.ceil(max_pos_y-min_pos_y)/blk_size+100))]
+    for item in dic.keys():
+        for j in range(len(dic[item]['frame'][0])):
+            xbeg=dic[item]['frame'][0][j][0]
+            ybeg=dic[item]['frame'][0][j][1]
+            xend=dic[item]['frame'][0][j][2]
+            yend=dic[item]['frame'][0][j][3]
+            dic[item]['circum']+=dist((xbeg,ybeg),(xend,yend))
+       # if dic[item]['circum']<0.005:
+           # del dic[item]
+            
     for item in dic:
-        for other in dic:
-            if abs(dic[other]['pos'][0][0]-dic[item]['pos'][0][0])>0.02 or abs(dic[other]['pos'][0][1]-dic[item]['pos'][0][1])>0.02:
+        for j in range(len(dic[item]['frame'][0])):
+            xbeg=dic[item]['frame'][0][j][0]
+            ybeg=dic[item]['frame'][0][j][1]
+            xend=dic[item]['frame'][0][j][2]
+            yend=dic[item]['frame'][0][j][3]
+            x=int(math.floor((xbeg-min_pos_x)/blk_size))
+            y=int(math.floor((ybeg-min_pos_y)/blk_size))
+            if item in map_index[x][y]:
                 continue
-            if dic[other]['pos'][0]==dic[item]['pos'][0]:
-                continue
-            if other in dic[item]['link']:
-                continue
-            minDis=dist((dic[other]['frame'][0][0][0],dic[other]['frame'][0][0][1]),(dic[item]['frame'][0][0][0],dic[item]['frame'][0][0][1]));
-            for j in range(len(dic[item]['frame'][0])):
-                for k in range(len(dic[other]['frame'][0])):
-                    minDis=min(dist((dic[other]['frame'][0][k][0],dic[other]['frame'][0][k][1]),(dic[item]['frame'][0][j][0],dic[item]['frame'][0][j][1])),minDis)
-                    if minDis < 0.001:
-                        break
-            if minDis < 0.001:
-                dic[item]['link'].append(other)
-                dic[other]['link'].append(item)
             else:
-                continue
+                for key in map_index[x][y]:
+                    if not key in dic[item]['link']:
+                        dic[item]['link'].append(key)
+                    if not item in dic[key]['link']:
+                        dic[key]['link'].append(item)
+                map_index[x][y].append(item)
+                dic[item]['index'].append((x,y))
+            
     # Begin to merge the nearby zones          
     for item in dic.keys():
       #  print "ITEM:%s"%item
@@ -216,9 +225,15 @@ def Start():
             continue
         for key in dic[item]['link']:
 #            print "item:%s,key:%s"%(item,key)
+            if dic.get(key,'')=='':
+                continue
+            if dic.get(item,'')=='':
+                break
             if dic[item]['link']==[]:
                 break
             if key == item:
+                continue
+            if dic[item]['frame'][0]==[]:
                 continue
             if not (key in dic) or not (item in dic):
                 continue
@@ -228,14 +243,89 @@ def Start():
             if dic[item]['circum']+dic[key]['circum']>opt_circum_max:
                 continue
             if dic[item]['circum']+dic[key]['circum']<opt_circum_max:
+                frame=[]
+                
+                minItemPos=[]
+                minKeyPos=[]
+                minPos=[]
+                minDist=1.0
+                for seg_line in dic[item]['frame'][0]:
+                    ikdist=dist((seg_line[0],seg_line[1]),(dic[key]['pos'][0][0],dic[key]['pos'][0][1]))
+                    if ikdist<minDist:
+                        minItemPos=[seg_line[0],seg_line[1]]
+                        minDist=ikdist
+                minDist=1.0
+                for seg_line in dic[key]['frame'][0]:
+                    ikdist=dist((seg_line[0],seg_line[1]),(dic[item]['pos'][0][0],dic[item]['pos'][0][1]))
+                    if ikdist<minDist:
+                        minKeyPos=[seg_line[0],seg_line[1]]
+                        minDist=ikdist
+                #minPos=[(minItemPos[0]+minKeyPos[0])/2,(minItemPos[1]+minKeyPos[1])/2]
+                minPos=minItemPos
+                angle=[[] for i in range(line_num)]
+                '''
+                for i in range(line_num):
+                    agl=(2*math.pi/line_num)*i
+                    if abs(agl-math.pi/2)<0.0001 or abs(agl-math.pi*3/2)<0.0001:
+                        continue
+                    for seg_line in dic[item]['frame'][0]:
+                        ai=(seg_line[0]-minPos[0])*100000
+                        bi=(seg_line[1]-minPos[1])*100000
+                        aj=(seg_line[2]-minPos[0])*100000
+                        bj=(seg_line[3]-minPos[1])*100000
+                        if (bi-ai*math.tan(agl))*(bj-aj*math.tan(agl))<0 and (seg_line[0]+seg_line[1]*math.tan(agl))>0:
+                            if angle[i]==[] or dist((minPos[0],minPos[1]),(angle[i][0],angle[i][1])) < dist((minPos[0],minPos[1]),(seg_line[0],seg_line[1])):
+                                angle[i]=[seg_line[0],seg_line[1]]
+                    for seg_line in dic[key]['frame'][0]:
+                        ai=(seg_line[0]-minPos[0])*100000
+                        bi=(seg_line[1]-minPos[1])*100000
+                        aj=(seg_line[2]-minPos[0])*100000
+                        bj=(seg_line[3]-minPos[1])*100000
+                        if (bi-ai*math.tan(agl))*(bj-aj*math.tan(agl))<0 and (seg_line[0]+seg_line[1]*math.tan(agl))>0:
+                            if angle[i]==[] or dist((minPos[0],minPos[1]),(angle[i][0],angle[i][1])) < dist((minPos[0],minPos[1]),(seg_line[0],seg_line[1])):
+                                angle[i]=[seg_line[0],seg_line[1]]
+                angle=[e for e in angle if e!=[]]
+                for i in range(len(angle)):
+                    frame.append(angle[i%len(angle)]+angle[(i+1)%len(angle)])
+ 
+                '''
+                for i in range(line_num):
+                    if i==line_num/4 or i==line_num/4*3:
+                        continue
+                    print 'item'
+                    for seg_line in dic[item]['frame'][0]:
+                        ai=(seg_line[0]-minPos[0])*1000000
+                        bi=(seg_line[1]-minPos[1])*1000000
+                        aj=(seg_line[2]-minPos[0])*1000000
+                        bj=(seg_line[3]-minPos[1])*1000000
+                        print (bi-math.tan(i*2*math.pi/line_num)*ai)*(bj-math.tan(i*2*math.pi/line_num)*aj)
+                        if (i<=line_num/2 and bi>0) or (i>line_num/2 and bi <0):     
+                            if (bi-math.tan(i*2*math.pi/line_num)*ai)*(bj-math.tan(i*2*math.pi/line_num)*aj)<0:
+                                if angle[i]==[] or dist((minPos[0],minPos[1]),(angle[i][0],angle[i][1])) < dist((minPos[0],minPos[1]),(seg_line[0],seg_line[1])):
+                                    angle[i]=[seg_line[0],seg_line[1]]
+                                    print angle[i]
+                    print 'key'
+                    for seg_line in dic[key]['frame'][0]:
+                        ai=(seg_line[0]-minPos[0])*1000000
+                        bi=(seg_line[1]-minPos[1])*1000000
+                        aj=(seg_line[2]-minPos[0])*1000000
+                        bj=(seg_line[3]-minPos[1])*1000000
+                        print (bi-math.tan(i*2*math.pi/line_num)*ai)*(bj-math.tan(i*2*math.pi/line_num)*aj)
+                        if (i<=line_num/2 and bi>0) or (i>line_num/2 and bi <0):     
+                            if (bi-math.tan(i*2*math.pi/line_num)*ai)*(bj-math.tan(i*2*math.pi/line_num)*aj)<0:
+                                if angle[i]==[] or dist((minPos[0],minPos[1]),(angle[i][0],angle[i][1])) < dist((minPos[0],minPos[1]),(seg_line[0],seg_line[1])):
+                                    angle[i]=[seg_line[0],seg_line[1]]
+                                    print angle[i]
+                angle=[e for e in angle if e!=[]]
+                for i in range(len(angle)):
+                    frame.append(angle[i%len(angle)]+angle[(i+1)%len(angle)])
+                
                 dic[item]['circum']+=dic[key]['circum']
-#                print "mergeBefore"
- #               print dic[item]['link']
-  #              print dic[key]['link']
                 dic[item]['link']+=dic[key]['link']
                 dic[item]['link']=list(set(dic[item]['link']))
-   #             print "merge"
-    #            print dic[item]['link']
+                dic[item]['index']+=dic[key]['index']
+                dic[item]['frame'][0]=frame
+                #dic[item]['frame']+=dic[key]['frame']
                 try:
                     dic[item]['link'].remove(item)
                 except:
@@ -244,120 +334,13 @@ def Start():
                     dic[item]['link'].remove(key)
                 except:
                     pass
-     #           print "adjust"
-      #          print dic[item]['link']
                 for d_key in dic[key]['link']:
                     try:
                         dic[d_key]['link'].remove(key)
                     except:
                         pass
                 dic[item]['pos']+=dic[key]['pos']
-                dic[item]['frame']+=dic[key]['frame']
-                dic[item]['corner']+=dic[key]['corner']
                 del dic[key]
-                '''
-                for u in range(len(dic[item]['frame'])-1):
-                    for v in range(len(dic[item]['frame'][u])):
-                        minDis=1.0
-                        for c in range(len(dic[item]['frame'][-1])):
-                            if c>=len(dic[item]['frame'][-1]) or v>=len(dic[item]['frame'][u]):
-                                continue
-                            minDis=min(dist((dic[item]['frame'][u][v][0],dic[item]['frame'][u][v][1]),(dic[item]['frame'][-1][c][0],dic[item]['frame'][-1][c][1])),minDis)
-                            if minDis>0.001:
-                 '''     
-    for item in dic.keys():
-        if dic.get(item,'')=='':
-            continue
-
-        if dic[item]['circum']<opt_circum_min_2:
-            for key2 in dic[item]['link']:
-                if dic.get(key2,'')=='':
-                    continue
-                if dic[item]['link']==[]:
-                    break
-                if key2 == item:
-                    continue
-            for key in dic[item]['link']:
-                if dic.get(key,'')=='':
-                    continue
-                if dic[item]['link']==[]:
-                    break
-                if key == item:
-                    continue
-                if dic[item]['circum']+dic[key]['circum']>opt_circum_max_2:
-                    continue
-                if dic[item]['circum']+dic[key]['circum']<opt_circum_max_2:
-                    dic[item]['circum']+=dic[key]['circum']
-                    dic[item]['link']+=dic[key]['link']
-                    dic[item]['link']=list(set(dic[item]['link']))
-                    try:
-                        dic[item]['link'].remove(item)
-                    except:
-                        pass
-                    try:
-                        dic[item]['link'].remove(key)
-                    except:
-                        pass
-                    for d_key in dic[key]['link']:
-                        try:
-                            dic[d_key]['link'].remove(key)
-                        except:
-                            pass
-                    dic[item]['pos']+=dic[key]['pos']
-                    dic[item]['frame']+=dic[key]['frame']
-                    dic[item]['corner']+=dic[key]['corner']
-                    del dic[key]
-                    '''
-                    for u in range(len(dic[item]['frame'])-1):
-                        for v in range(len(dic[item]['frame'][u])):
-                            minDis=1.0
-                            for c in range(len(dic[item]['frame'][-1])):
-                                if c>=len(dic[item]['frame'][-1]) or v>=len(dic[item]['frame'][u]):
-                                    continue
-                                minDis=min(dist((dic[item]['frame'][u][v][0],dic[item]['frame'][u][v][1]),(dic[item]['frame'][-1][c][0],dic[item]['frame'][-1][c][1])),minDis)
-                                if minDis<0.001:
-                                    try:
-                                        dic[item]['frame'][-1].remove(dic[item]['frame'][-1][c])
-                                    except:
-                                        pass
-                                    try:
-                                        dic[item]['frame'][u].remove(dic[item]['frame'][u][v])
-                                    except:
-                                        pass
-                '''
-                '''
-                minDis=1
-                for p in range(len(dic[item]['frame'])):
-                    minDis=1
-                    for q in range(len(dic[key]['frame'])):
-                        minDis=min(dist((dic[key]['frame'][q][0],dic[key]['frame'][q][1]),(dic[item]['frame'][p][0],dic[item]['frame'][p][1])),minDis)
-
-                        if minDis < 0.001 and (dic[key]['frame'][q][0],dic[key]['frame'][q][0]) in dic[key]['corner']:
-                            if not (dic[key]['frame'][q][0],dic[key]['frame'][q][1]) in qcorner:
-                                qcorner.append((dic[key]['frame'][q][0],dic[key]['frame']))
-                        if minDis < 0.001 and (dic[item]['frame'][p][0],dic[item]['frame'][p][1]) in dic[item]['corner']:
-                            if not (dic[item]['frame'][p][0],dic[item]['frame'][p][1]) in pcorner:
-                                pcorner.append((dic[item]['frame'][p][0],dic[item]['frame'][p][1]))    
-
-                    if minDis > 0.001:
-                        pstart=p
-                pcur=pstart
-                for p in range(len(dic[item]['frame'])):
-                    minDis=1.0
-                    pcur=(p+pstart)%len(dic[item]['frame'])
-                    if (dic[item]['frame'][pcur][0],dic[item]['frame'][pcur][1]) in pcorner :
-                        qpos=0xff
-                        for q in range(len(qcorner)):
-                            pdist=dist((dic[item]['frame'][pcur][0],(dic[item]['frame'][pcur][1]),(q[0],q[1])))
-                            if pdist<minDis:
-                                minDis=pdist
-                                qpos=q
-                        #if qpos!=0xff:                     
-                            #dic[item]['frame'].append([dic[item]['frame'][pcur][0],dic[item]['frame'][pcur][1],qcorner[qpos][0],qcorner[qpos][1]]) 
-                '''
-    
-        #        print dic[item]['link']
-       #         print "item:%s,circum:%f"%(item,dic[item]['circum'])
     # Begin to store data
     client2,db2,posts2=Connect2Mongo('localhost',27017,'drawFrame','bj_frame_test')
     posts2.drop()
@@ -373,6 +356,10 @@ def Start():
         posts2.save(json_dic)
     client.disconnect()
     client2.disconnect()
+
+        #        print dic[item]['link']
+       #         print "item:%s,circum:%f"%(item,dic[item]['circum'])
+
 
 
 if __name__ == "__main__":
