@@ -21,9 +21,9 @@ ERROR='0'
 RIGHT='1'
 
 
-FRESHNESS_IP='10.16.18.110'
-USER_BEHAVIOR_IP='10.16.24.68'
-RANK_IP='10.16.24.68'
+FRESHNESS_IP='10.16.41.16'
+USER_BEHAVIOR_IP='10.16.41.16'
+RANK_IP='10.16.41.16'
 PROSP_IP='localhost'
 FRM_IP='localhost'
 MONGO_PORT=27017
@@ -106,6 +106,18 @@ def Start():
         logger.error("connect 2 mongodb failed.")
         return
     try:
+        client_rgn,db_rgn,posts_rgn = Connect2Mongo("localhost", 27017,"collect_frame","region_info")
+    except:
+        client_rgn.disconnect()
+        logger.error("connect 2 mongodb failed.")
+        return
+    try:
+        client_newrgn,db_newrgn,posts_newrgn = Connect2Mongo("localhost", 27017,"collect_frame","newregion_info")
+    except:
+        client_newrgn.disconnect()
+        logger.error("connect 2 mongodb failed.")
+        return
+    try:
         client_pdargn,db_pdargn,posts_pdargn = Connect2Mongo("localhost", 27017,"collect_frame","pdaregion_info")
     except:
         client_pdargn.disconnect()
@@ -153,6 +165,12 @@ def Start():
         client_pdafrm.disconnect()
         logger.error("connect 2 mongodb failed.")
         return
+    try:
+        client_newfrm,db_newfrm,posts_newfrm = Connect2Mongo(FRM_IP,MONGO_PORT,'formal',"newfrm_table")
+    except:
+        client_newfrm.disconnect()
+        logger.error("connect 2 mongodb failed.")
+        return
     logger.info("connect 2 mongodb success")
     print 'begin time'
     put_time_stamp()
@@ -161,11 +179,13 @@ def Start():
     #process_frame_2_poiids(posts_frm,logger)
     #put_frame_2_db(posts_frm,logger)
     #put_fanhua_2_db(posts_pr,logger)
-    #get_region_frame(posts_poi,posts_city,posts_rgn,posts_pr,posts_fr,posts_rk,posts_ur,posts_frm,logger,logger_special)
-    get_region_frame(posts_pdapoi,posts_city,posts_pdargn,posts_pr,posts_fr,posts_rk,posts_ur,posts_pdafrm,logger,logger_special)
+    #put_frame_poi_2_db(posts_newfrm,logger)
+    get_region_frame(posts_poi,posts_city,posts_rgn,posts_pr,posts_fr,posts_rk,posts_ur,posts_newfrm,logger,logger_special)
+    #get_region_frame(posts_poi,posts_city,posts_newrgn,posts_pr,posts_fr,posts_rk,posts_ur,posts_newfrm,logger,logger_special)
     #put_poi_2_db(posts_poi,logger)
     #test_rank(posts_frm,logger)
-    get_rank_value(posts_pdargn,logger)
+    #chg_frm(posts_newrgn,logger)
+    get_rank_value(posts_rgn,logger)
     put_time_stamp()
     
 def put_time_stamp():
@@ -181,22 +201,30 @@ def put_fanhua_2_db(posts_pr,logger):
         data['_id']=item[0]
         data['prosp']=float(item[-1].strip('\n'))
         posts_pr.save(data)
-def get_rank_value(posts_rgn,logger):
-    s_rank=0
-    posts_rgn.create_index([('poi_num',-1)])
-    for item in posts_rgn.find().sort([('poi_num',-1)]):
-        if item['poi_num']!=0:
-            s_rank+=1
-        item['poi_rank']=s_rank
+def chg_frm(posts_rgn,logger):
+    f_in=open('combineresult_finalout.txt','r')
+    for line in f_in:
+        line_spl=line.split('\t')
+        item=posts_rgn.find_one({'_id':line_spl[0]})
+        if item==None:
+            print line_spl[0]
+            continue
+        item['frm']=line_spl[1].strip('\n')
         posts_rgn.save(item)
+def get_rank_value(posts_rgn,logger):
     s_rank=0
     posts_rgn.create_index([('mileage',-1)])
     for item in posts_rgn.find().sort([('mileage',-1)]):
         s_rank+=1
         item['mile_rank']=s_rank
         posts_rgn.save(item)
-        if s_rank==3:
-            print item
+    posts_rgn.drop_indexes()
+    s_rank=0
+    posts_rgn.create_index([('poi_num',-1)])
+    for item in posts_rgn.find().sort([('poi_num',-1)]):
+        s_rank+=1
+        item['poi_rank']=s_rank
+        posts_rgn.save(item)
     s_rank=0
     posts_rgn.create_index([('importance',-1)])
     for item in posts_rgn.find().sort([('importance',-1)]):
@@ -208,33 +236,48 @@ def get_rank_value(posts_rgn,logger):
         item['importance_rank']=s_rank
         posts_rgn.save(item)
     s_rank=0
-    posts_rgn.create_index([('poiinfo_num',-1)])
-    for item in posts_rgn.find().sort([('poiinfo_num',-1)]):
-        if item['poiinfo_num']!=0:
-            s_rank+=1
-        item['poiinfo_rank']=s_rank
+    posts_rgn.create_index([('prosp',-1)])
+    for item in posts_rgn.find().sort([('prosp',-1)]):
+        try:
+            if item['prosp']>0.1:
+                s_rank+=1
+        except:
+            pass
+        item['prosp_rank']=s_rank
         posts_rgn.save(item)
     s_rank=0
-    posts_rgn.create_index([('bus_num',-1)])
-    for item in posts_rgn.find().sort([('bus_num',-1)]):
-        if item['bus_num']!=0:
-            s_rank+=1
-        item['bus_rank']=s_rank
-        posts_rgn.save(item)
-    s_rank=0
-    posts_rgn.create_index([('drive_num',-1)])
-    for item in posts_rgn.find().sort([('drive_num',-1)]):
-        if item['drive_num']!=0:
-            s_rank+=1
-        item['drive_rank']=s_rank
-        posts_rgn.save(item)
-    s_rank=0
-    posts_rgn.create_index([('search_num',-1)])
-    for item in posts_rgn.find().sort([('search_num',-1)]):
-        if item['search_num']!=0:
-            s_rank+=1
-        item['search_rank']=s_rank
-        posts_rgn.save(item)
+    posts_rgn.create_index([('freshness',-1)])
+    for item in posts_rgn.find().sort([('freshness',-1)]):
+        if item.get('freshness','')=='':
+            item['fresh_rank']=s_rank
+            posts_rgn.save(item)
+        else:
+            if item['freshness']!=0:
+                s_rank+=1
+            item['fresh_rank']=s_rank
+            posts_rgn.save(item)
+    cont=['bus','drive','search','poi_info','share','error','collection','group']
+    scope=['w','m']
+    for c in cont:
+        for s in scope:
+            for i in range(5):
+                '''
+                for item in posts_rgn.find():
+                    item[c+s+str(i)]=item[c+'_num'][s][i]
+                    posts_rgn.save(item)
+                '''
+                posts_rgn.create_index([(c+s+str(i),-1)])
+                s_rank=0
+                for item in posts_rgn.find().sort([(c+s+str(i),-1)]):
+                    try:
+                        if item[c+s+str(i)]!=0:
+                            s_rank+=1
+                        item[c+s+str(i)+"_rank"]=s_rank
+                        #del item[c+s+str(i)]
+                    except:
+                        item[c+s+str(i)+"_rank"]=s_rank
+                    posts_rgn.save(item)
+                posts_rgn.drop_indexes()
 
 def put_frame_2_db(posts_frm,logger):
     f_in=open('./combineresult.txt','r')
@@ -257,6 +300,40 @@ def put_frame_2_db(posts_frm,logger):
         data_ins=item_frm[1]
         data_ins['cap_rank']=s_index
         posts_frm.save(data_ins)
+def put_frame_poi_2_db(posts_newfrm,logger):
+    f_in=open('./beijing_poi.txt','r')
+    frm_data={}
+    for line in f_in.readlines():
+        item=line.split('\t')
+        data={}
+        data['_id']=item[0]
+        data['lon']=float(item[2])
+        data['lat']=float(item[1])
+        data['mileage']=float(item[3])
+        data['poi_num']=float(item[4])
+        data['poi_cap']=float(item[5])
+        data['frm']=item[6].strip('\n')
+        pois=item[7].strip('\n')
+        pois_spl=pois.split(';')
+        poilst=[]
+        if data['poi_num']<1:
+            pass
+        else:
+            for poi in pois_spl:
+                try:
+                    poi_item=poi.split(',')
+                    poi_item[1]=poi_item[1].strip('\n')
+                    poilst.append(poi_item)
+                except:
+                    pass
+        data['pois']=poilst
+        posts_newfrm.save(data)
+    s_rank=0
+    posts_newfrm.create_index([('poi_cap',-1)])
+    for item in posts_newfrm.find().sort([('poi_cap',-1)]):
+        s_rank+=1
+        item['cap_rank']=s_rank
+        posts_newfrm.save(item)
 def put_pdaframe_2_db(posts_pdafrm,posts_pdapoi,logger):
     f_in=open('./PDArgn.csv','r')
     frm_data={}
@@ -355,6 +432,9 @@ def get_city_rank_val_total(posts_rk,logger):
         smp=posts_rk.find_one({'rank_type_val':str(item)})
         if smp==None:
             continue
+        rank_val_total=smp['city']['total']
+        print rank_val_total
+        return rank_val_total
         rank_val_total+=int(smp['city_rank_type']['total'])
         print rank_val_total
     return rank_val_total
@@ -394,6 +474,10 @@ def get_region_frame(posts_poi,posts_city,posts_rgn,posts_pr,posts_fr,posts_rk,p
     city_total_search_num=0
     city_total_bus_num=0
     city_total_drive_num=0
+    city_total_group_num=0
+    city_total_error_num=0
+    city_total_share_num=0
+    city_total_collection_num=0
     now=int(time.time())
     nowW=time.localtime(now)
     oneW=time.localtime(now-604800)
@@ -423,7 +507,7 @@ def get_region_frame(posts_poi,posts_city,posts_rgn,posts_pr,posts_fr,posts_rk,p
     else:
         forym="%4d%02d"%(nowW[0],nowW[1]-4)
     scope=['w','m']                             
-    cont=['bus','drive','search','poi_info']
+    cont=['bus','drive','search','poi_info','share','error','collection','group']
     wlst=[nowyw,oneyw,twoyw,thryw,foryw]
     mlst=[nowym,oneym,twoym,thrym,forym]
     print 'get_total'
@@ -433,8 +517,6 @@ def get_region_frame(posts_poi,posts_city,posts_rgn,posts_pr,posts_fr,posts_rk,p
     print 'start to deal with rgn'
     put_time_stamp()
     frm_num=posts_frm.count()
-    city_stc={}
-    city_stc['typedic']={}
     rgn_num=posts_frm.count()
     for item_frm in posts_frm.find().batch_size(2):
         '''
@@ -454,29 +536,56 @@ def get_region_frame(posts_poi,posts_city,posts_rgn,posts_pr,posts_fr,posts_rk,p
         rst_str=rst_json['result']['poiids']
         poiids=rst_str.split(',')
         '''
-        poilst=[]
-        item_poi=posts_poi.find_one({'_id':item_frm['_id']})
-        if item_poi==None:
-            poilst=[]
-        else:
-            poilst=item_poi['poilst']
-        rank_val=get_rgn_rank_val(poilst,rank_val_total,posts_rk,logger)
+
         data={}
         data['_id']=item_frm['_id']
         data['lon']=float(item_frm['lon'])
         data['lat']=float(item_frm['lat'])
         data['poi_num']=item_frm['poi_num']
         data['poi_cap']=item_frm['poi_cap']
-        data['mileage']=item_frm['mileage']
         data['cap_rank']=item_frm['cap_rank']
+        data['mileage']=item_frm['mileage']
         data['frm']=item_frm['frm']
+        poilst=item_frm['pois']
+        #item_poi=posts_poi.find_one({'_id':item_frm['_id']})
+        rank_val=get_rgn_rank_val(poilst,rank_val_total,posts_rk,logger)
+        
+        
         data['importance']=0.0
-        data['poiinfo_num']=0
-        data['bus_num']=0
-        data['drive_num']=0
-        data['search_num']=0
+        data['prosp']=0.0
+        data['freshness']=0.0
+        data['poi_info_num']={}
+        data['poi_info_num']['w']=[0,0,0,0,0]
+        data['poi_info_num']['m']=[0,0,0,0,0]
+        data['bus_num']={}
+        data['bus_num']['w']=[0,0,0,0,0]
+        data['bus_num']['m']=[0,0,0,0,0]
+        data['drive_num']={}
+        data['drive_num']['w']=[0,0,0,0,0]
+        data['drive_num']['m']=[0,0,0,0,0]
+        data['error_num']={}
+        data['error_num']['w']=[0,0,0,0,0]
+        data['error_num']['m']=[0,0,0,0,0]
+        data['share_num']={}
+        data['share_num']['w']=[0,0,0,0,0]
+        data['share_num']['m']=[0,0,0,0,0]
+        data['collection_num']={}
+        data['collection_num']['w']=[0,0,0,0,0]
+        data['collection_num']['m']=[0,0,0,0,0]
+        data['group_num']={}
+        data['group_num']['w']=[0,0,0,0,0]
+        data['group_num']['m']=[0,0,0,0,0]
+        data['search_num']={}
+        data['search_num']['w']=[0,0,0,0,0]
+        data['search_num']['m']=[0,0,0,0,0]
         city_total_mile_num+=data['mileage']
         if poilst==[]:
+            cont=['bus','drive','search','poi_info','share','error','collection','group']
+            scope=['w','m']
+            for c in cont:
+                for s in scope:
+                    for i in range(5):
+                        data[c+s+str(i)]=0
             data['info']={}
             data['info']['classify']={}
             data['info']['freshness']=0.0
@@ -538,18 +647,20 @@ def get_region_frame(posts_poi,posts_city,posts_rgn,posts_pr,posts_fr,posts_rk,p
                 rgn_lvli['classify'][type]['usr_bhr']['w']={}
                 rgn_lvli['classify'][type]['usr_bhr']['m']={}
                 for c in cont:
-                    rgn_lvli['classify'][type]['usr_bhr']['w'][c]=[]
+                    rgn_lvli['classify'][type]['usr_bhr']['w'][c]=[[0,''],[0,''],[0,''],[0,''],[0,'']]
                     for w in wlst:
-                        if item_ur==None or item_ur['w'].get(c,'')=='' or item_ur['w'][c].get(w,'')=='' or item_ur['w'][c][w].get('pv_level','')=='':
-                            rgn_lvli['classify'][type]['usr_bhr']['w'][c].append([0,0])
+                        if item_ur==None or item_ur['w'].get(c,'')=='' or item_ur['w'][c].get(w,'')=='':
+                            rgn_lvli['classify'][type]['usr_bhr']['w'][c][wlst.index(w)]=[0,w[-2:]]
                         else:
-                            rgn_lvli['classify'][type]['usr_bhr']['w'][c].append([float(item_ur['w'][c][w]['pv']),float(item_ur['w'][c][w]['pv_level'][1])])
-                    rgn_lvli['classify'][type]['usr_bhr']['m'][c]=[]
+                            rgn_lvli['classify'][type]['usr_bhr']['w'][c][wlst.index(w)][0]=float(item_ur['w'][c][w]['pv'])
+                            rgn_lvli['classify'][type]['usr_bhr']['w'][c][wlst.index(w)][1]=w[-2:]
+                    rgn_lvli['classify'][type]['usr_bhr']['m'][c]=[[0,''],[0,''],[0,''],[0,''],[0,'']]
                     for m in mlst:   
-                        if item_ur==None or item_ur['m'].get(c,'')=='' or item_ur['m'][c].get(m,'')==''or item_ur['m'][c][m].get('pv_level','')=='':
-                            rgn_lvli['classify'][type]['usr_bhr']['m'][c].append([0,0])
+                        if item_ur==None or item_ur['m'].get(c,'')=='' or item_ur['m'][c].get(m,'')=='':
+                            rgn_lvli['classify'][type]['usr_bhr']['m'][c][mlst.index(m)]=[0,m[-2:]]
                         else:
-                            rgn_lvli['classify'][type]['usr_bhr']['m'][c].append([float(item_ur['m'][c][m]['pv']),float(item_ur['m'][c][m]['pv_level'][1])])
+                            rgn_lvli['classify'][type]['usr_bhr']['m'][c][mlst.index(m)][0]=float(item_ur['m'][c][m]['pv'])
+                            rgn_lvli['classify'][type]['usr_bhr']['m'][c][mlst.index(m)][1]=m[-2:0]
             else:
                 rgn_lvli['classify'][type]['list'].append(poi_item)
                 try:
@@ -570,17 +681,18 @@ def get_region_frame(posts_poi,posts_city,posts_rgn,posts_pr,posts_fr,posts_rk,p
                     continue
                 for c in cont:
                     for w in wlst:   
-                        if item_ur['w'].get(c,'')=='' or item_ur['w'][c].get(w,'')=='' or item_ur['w'][c][w].get('pv_level','')=='':
+                        if item_ur['w'].get(c,'')=='' or item_ur['w'][c].get(w,'')=='' :
+                            rgn_lvli['classify'][type]['usr_bhr']['w'][c][wlst.index(w)][1]=w[-2:0]
                             continue
                         else:
                             rgn_lvli['classify'][type]['usr_bhr']['w'][c][wlst.index(w)][0]+=float(item_ur['w'][c][w]['pv'])
-                            rgn_lvli['classify'][type]['usr_bhr']['w'][c][wlst.index(w)][1]+=float(item_ur['w'][c][w]['pv_level'][1])
                     for m in mlst:
-                        if item_ur['m'].get(c,'')=='' or item_ur['m'][c].get(m,'')=='' or item_ur['m'][c][m].get('pv_level','')=='':
+                        if item_ur['m'].get(c,'')=='' or item_ur['m'][c].get(m,'')=='' :
+                            rgn_lvli['classify'][type]['usr_bhr']['m'][c][mlst.index(m)][1]=m[-2:0]
                             continue
                         else:
                             rgn_lvli['classify'][type]['usr_bhr']['m'][c][mlst.index(m)][0]+=float(item_ur['m'][c][m]['pv'])
-                            rgn_lvli['classify'][type]['usr_bhr']['m'][c][mlst.index(m)][1]+=float(item_ur['m'][c][m]['pv_level'][1])
+                            rgn_lvli['classify'][type]['usr_bhr']['m'][c][mlst.index(m)][1]=m[-2:0]
             if item_ur==None or item_ur['m'].get('poi_info','')=='' or item_ur['m']['poi_info'].get(oneym,'')=='':
                 city_total_poiinfo_num+=0
             else:
@@ -597,12 +709,42 @@ def get_region_frame(posts_poi,posts_city,posts_rgn,posts_pr,posts_fr,posts_rk,p
                 city_total_drive_num+=0
             else:
                 city_total_drive_num+=int(item_ur['m']['drive'][oneym]['pv'])
+            if item_ur==None or item_ur['m'].get('collection','')=='' or item_ur['m']['collection'].get(oneym,'')=='':
+                city_total_collection_num+=0
+            else:
+                city_total_collection_num+=int(item_ur['m']['collection'][oneym]['pv'])
+            if item_ur==None or item_ur['m'].get('group','')=='' or item_ur['m']['group'].get(oneym,'')=='':
+                city_total_group_num+=0
+            else:
+                city_total_group_num+=int(item_ur['m']['group'][oneym]['pv'])
+            if item_ur==None or item_ur['m'].get('share','')=='' or item_ur['m']['share'].get(oneym,'')=='':
+                city_total_share_num+=0
+            else:
+                city_total_share_num+=int(item_ur['m']['share'][oneym]['pv'])
+            if item_ur==None or item_ur['m'].get('error','')=='' or item_ur['m']['error'].get(oneym,'')=='':
+                city_total_error_num+=0
+            else:
+                city_total_error_num+=int(item_ur['m']['error'][oneym]['pv'])
         Q=0.0
         for type in rgn_lvli['classify']:
-            data['poiinfo_num']+=int(rgn_lvli['classify'][type]['usr_bhr']['m']['poi_info'][mlst.index(oneym)][0])
-            data['bus_num']+=int(rgn_lvli['classify'][type]['usr_bhr']['m']['bus'][mlst.index(oneym)][0])
-            data['drive_num']+=int(rgn_lvli['classify'][type]['usr_bhr']['m']['drive'][mlst.index(oneym)][0])
-            data['search_num']+=int(rgn_lvli['classify'][type]['usr_bhr']['m']['search'][mlst.index(oneym)][0])
+            for m in mlst:
+                data['poi_info_num']['m'][mlst.index(m)]+=int(rgn_lvli['classify'][type]['usr_bhr']['m']['poi_info'][mlst.index(m)][0])
+                data['bus_num']['m'][mlst.index(m)]+=int(rgn_lvli['classify'][type]['usr_bhr']['m']['bus'][mlst.index(m)][0])
+                data['drive_num']['m'][mlst.index(m)]+=int(rgn_lvli['classify'][type]['usr_bhr']['m']['drive'][mlst.index(m)][0])
+                data['search_num']['m'][mlst.index(m)]+=int(rgn_lvli['classify'][type]['usr_bhr']['m']['search'][mlst.index(m)][0])
+                data['group_num']['m'][mlst.index(m)]+=int(rgn_lvli['classify'][type]['usr_bhr']['m']['group'][mlst.index(m)][0])
+                data['share_num']['m'][mlst.index(m)]+=int(rgn_lvli['classify'][type]['usr_bhr']['m']['share'][mlst.index(m)][0])
+                data['error_num']['m'][mlst.index(m)]+=int(rgn_lvli['classify'][type]['usr_bhr']['m']['error'][mlst.index(m)][0])
+                data['collection_num']['m'][mlst.index(m)]+=int(rgn_lvli['classify'][type]['usr_bhr']['m']['collection'][mlst.index(m)][0])
+            for w in wlst:
+                data['poi_info_num']['w'][wlst.index(w)]+=int(rgn_lvli['classify'][type]['usr_bhr']['w']['poi_info'][wlst.index(w)][0])
+                data['bus_num']['w'][wlst.index(w)]+=int(rgn_lvli['classify'][type]['usr_bhr']['w']['bus'][wlst.index(w)][0])
+                data['drive_num']['w'][wlst.index(w)]+=int(rgn_lvli['classify'][type]['usr_bhr']['w']['drive'][wlst.index(w)][0])
+                data['search_num']['w'][wlst.index(w)]+=int(rgn_lvli['classify'][type]['usr_bhr']['w']['search'][wlst.index(w)][0])
+                data['group_num']['w'][wlst.index(w)]+=int(rgn_lvli['classify'][type]['usr_bhr']['w']['group'][wlst.index(w)][0])
+                data['share_num']['w'][wlst.index(w)]+=int(rgn_lvli['classify'][type]['usr_bhr']['w']['share'][wlst.index(w)][0])
+                data['error_num']['w'][wlst.index(w)]+=int(rgn_lvli['classify'][type]['usr_bhr']['w']['error'][wlst.index(w)][0])
+                data['collection_num']['w'][wlst.index(w)]+=int(rgn_lvli['classify'][type]['usr_bhr']['w']['collection'][wlst.index(w)][0])
             if len(rgn_lvli['classify'][type]['list'])-fr_count[type]<0.1:
                 rgn_lvli['classify'][type]['freshness']=0.0
             else:
@@ -611,10 +753,10 @@ def get_region_frame(posts_poi,posts_city,posts_rgn,posts_pr,posts_fr,posts_rk,p
             for c in cont:
                 for w in wlst:   
                     index=wlst.index(w)
-                    rgn_lvli['classify'][type]['usr_bhr']['w'][c][index][1]/=len(rgn_lvli['classify'][type]['list'])
+                    rgn_lvli['classify'][type]['usr_bhr']['w'][c][index][0]/=len(rgn_lvli['classify'][type]['list'])
                 for m in mlst:
                     index=mlst.index(m)
-                    rgn_lvli['classify'][type]['usr_bhr']['m'][c][index][1]/=len(rgn_lvli['classify'][type]['list'])  
+                    rgn_lvli['classify'][type]['usr_bhr']['m'][c][index][0]/=len(rgn_lvli['classify'][type]['list'])  
             try:
                 Q+=len(rgn_lvli['classify'][type]['list'])/float(data['poi_num'])/(float(rgn_lvli['classify'][type]['total_num'])/float(rgn_lvli['classify'][type]['city_total']))
             except:
@@ -634,17 +776,28 @@ def get_region_frame(posts_poi,posts_city,posts_rgn,posts_pr,posts_fr,posts_rk,p
         data['info']=rgn_lvli
         data['importance']=rgn_lvli['importance']
         data['prosp']=rgn_lvli['prosp']
+        data['freshness']=rgn_lvli['freshness']
+        cont=['bus','drive','search','poi_info','share','error','collection','group']
+        scope=['w','m']
+        for c in cont:
+            for s in scope:
+                for i in range(5):
+                    data[c+s+str(i)]=data[c+'_num'][s][i]
         print data
         posts_rgn.save(data)
         put_time_stamp()
     city_data={}
-    city_data['_id']='pda'
+    city_data['_id']='beijing'
     city_data['total_poi']=city_total_poi_num
     city_data['total_mile']=city_total_mile_num
     city_data['total_poiinfo']=city_total_poiinfo_num
     city_data['total_search']=city_total_search_num
     city_data['total_bus']=city_total_bus_num
     city_data['total_drive']=city_total_drive_num
+    city_data['total_error']=city_total_error_num
+    city_data['total_group']=city_total_group_num
+    city_data['total_collection']=city_total_collection_num
+    city_data['total_share']=city_total_share_num
     posts_city.save(city_data)
     
     '''
