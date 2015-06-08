@@ -68,7 +68,7 @@ def GetUrlData(url,param = ""):
             connect.close()
             code = RIGHT
         except:
-            print url
+            #print url
             sys.stdout.flush()
             traceback.print_exc()
             code = ERROR
@@ -80,31 +80,28 @@ def GetUrlData(url,param = ""):
 def Start():
     put_time_stamp()
     logger = InitLog('./log/clc_data_process.log')
-    logger_special=InitLog('./log/clc_data_tmp.log')
     try:
         client_city,db_city,posts_city = Connect2Mongo("localhost", 27017,"collect_frame","city_statistic")
     except:
         client_city.disconnect()
         logger.error("connect 2 mongodb failed.")
         return
+    '''
     try:
         client_poi,db_poi,posts_poi = Connect2Mongo("localhost", 27017,"collect_frame","rgn_poi")
     except:
         client_poi.disconnect()
         logger.error("connect 2 mongodb failed.")
         return
-    try:
-        client_city,db_city,posts_city = Connect2Mongo("localhost", 27017,"collect_frame","city_statistic")
-    except:
-        client_city.disconnect()
-        logger.error("connect 2 mongodb failed.")
-        return
+    '''
+    '''
     try:
         client_pdapoi,db_pdapoi,posts_pdapoi = Connect2Mongo("localhost", 27017,"collect_frame","rgn_pdapoi")
     except:
         client_pdapoi.disconnect()
         logger.error("connect 2 mongodb failed.")
         return
+    '''
     try:
         client_rgn,db_rgn,posts_rgn = Connect2Mongo("localhost", 27017,"collect_frame","region_info")
     except:
@@ -117,12 +114,14 @@ def Start():
         client_newrgn.disconnect()
         logger.error("connect 2 mongodb failed.")
         return
+    '''
     try:
         client_pdargn,db_pdargn,posts_pdargn = Connect2Mongo("localhost", 27017,"collect_frame","pdaregion_info")
     except:
         client_pdargn.disconnect()
         logger.error("connect 2 mongodb failed.")
         return
+     '''
     db_slt=['0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f']
     client_ur=[0 for i in range(16)]
     db_ur=[0 for i in range(16)]
@@ -153,26 +152,35 @@ def Start():
         client_pr.disconnect()
         logger.error("connect 2 mongodb failed.")
         return
+    '''
     try:
         client_frm,db_frm,posts_frm = Connect2Mongo(FRM_IP,MONGO_PORT,DATA_BASE,"frm_table")
     except:
         client_frm.disconnect()
         logger.error("connect 2 mongodb failed.")
         return
+    
     try:
         client_pdafrm,db_pdafrm,posts_pdafrm = Connect2Mongo(FRM_IP,MONGO_PORT,DATA_BASE,"pdafrm_table")
     except:
         client_pdafrm.disconnect()
         logger.error("connect 2 mongodb failed.")
         return
+    '''
     try:
         client_newfrm,db_newfrm,posts_newfrm = Connect2Mongo(FRM_IP,MONGO_PORT,'formal',"newfrm_table")
     except:
         client_newfrm.disconnect()
         logger.error("connect 2 mongodb failed.")
         return
+    try:
+        client_tmpfrm,db_tmpfrm,posts_tmpfrm = Connect2Mongo(FRM_IP,MONGO_PORT,'temp',"tmpfrm_table")
+    except:
+        client_tmpfrm.disconnect()
+        logger.error("connect 2 mongodb failed.")
+        return
     logger.info("connect 2 mongodb success")
-    print 'begin time'
+    #print 'begin time'
     put_time_stamp()
     #put_pdapoi_2_db(posts_pdapoi,logger)
     #put_pdaframe_2_db(posts_pdafrm,posts_pdapoi,logger)
@@ -180,14 +188,34 @@ def Start():
     #put_frame_2_db(posts_frm,logger)
     #put_fanhua_2_db(posts_pr,logger)
     #put_frame_poi_2_db(posts_newfrm,logger)
-    get_region_frame(posts_poi,posts_city,posts_rgn,posts_pr,posts_fr,posts_rk,posts_ur,posts_newfrm,logger,logger_special)
+    #get_region_frame(posts_city,posts_rgn,posts_pr,posts_fr,posts_rk,posts_ur,posts_newfrm,logger,logger_special)
     #get_region_frame(posts_poi,posts_city,posts_newrgn,posts_pr,posts_fr,posts_rk,posts_ur,posts_newfrm,logger,logger_special)
     #put_poi_2_db(posts_poi,logger)
     #test_rank(posts_frm,logger)
     #chg_frm(posts_newrgn,logger)
-    get_rank_value(posts_rgn,logger)
+    #get_rank_value(posts_newrgn,logger)
+    for i in range(110000,500000):
+        city=str(i)
+        filename='aoi/'+city+'_aoi.csv'
+        if os.path.exists(filename)==True:
+            cal_city(filename,posts_city,posts_pr,posts_fr,posts_rk,posts_ur,posts_tmpfrm,city,logger)
+        else:
+            continue
     put_time_stamp()
-    
+def cal_city(filename,posts_city,posts_pr,posts_fr,posts_rk,posts_ur,posts_tmpfrm,city,logger):
+    try:
+        client,db,posts = Connect2Mongo(FRM_IP,MONGO_PORT,'city_info',city)
+    except:
+        client.disconnect()
+        logger.error("connect 2 mongodb failed.")
+        return
+    posts.drop()
+    posts_tmpfrm.drop()
+    put_frame_poi_2_db(filename,posts_tmpfrm,logger)
+    #get_region_frame(posts_city,posts_rgn,posts_pr,posts_fr,posts_rk,posts_ur,posts_frm,city,logger)
+    test_pois_2_db(filename,posts,logger)
+    get_region_frame(posts_city,posts,posts_pr,posts_fr,posts_rk,posts_ur,posts_tmpfrm,city,logger)
+    get_rank_value(posts,logger)
 def put_time_stamp():
     t=time.time()
     tm=time.localtime(t)
@@ -214,15 +242,21 @@ def chg_frm(posts_rgn,logger):
 def get_rank_value(posts_rgn,logger):
     s_rank=0
     posts_rgn.create_index([('mileage',-1)])
+    acu_mileage=0.0
     for item in posts_rgn.find().sort([('mileage',-1)]):
         s_rank+=1
+        acu_mileage+=item['mileage']
+        item['acu_mileage']=acu_mileage
         item['mile_rank']=s_rank
         posts_rgn.save(item)
     posts_rgn.drop_indexes()
     s_rank=0
     posts_rgn.create_index([('poi_num',-1)])
+    acu_poi_num=0
     for item in posts_rgn.find().sort([('poi_num',-1)]):
         s_rank+=1
+        acu_poi_num+=item['poi_num']
+        item['acu_poi_num']=acu_poi_num
         item['poi_rank']=s_rank
         posts_rgn.save(item)
     s_rank=0
@@ -257,6 +291,7 @@ def get_rank_value(posts_rgn,logger):
             item['fresh_rank']=s_rank
             posts_rgn.save(item)
     cont=['bus','drive','search','poi_info','share','error','collection','group']
+    lst=[0 for i in range(8)]
     scope=['w','m']
     for c in cont:
         for s in scope:
@@ -266,15 +301,22 @@ def get_rank_value(posts_rgn,logger):
                     item[c+s+str(i)]=item[c+'_num'][s][i]
                     posts_rgn.save(item)
                 '''
+                acu_usr=0
                 posts_rgn.create_index([(c+s+str(i),-1)])
                 s_rank=0
                 for item in posts_rgn.find().sort([(c+s+str(i),-1)]):
                     try:
                         if item[c+s+str(i)]!=0:
                             s_rank+=1
+                        if s=='m' and i==1:
+                            acu_usr+=item[c+s+str(i)]
+                            item['acu_'+c]=acu_usr
                         item[c+s+str(i)+"_rank"]=s_rank
                         #del item[c+s+str(i)]
                     except:
+                        if s=='m' and i==1:
+                            acu_usr+=0
+                            item['acu_'+c]=acu_usr
                         item[c+s+str(i)+"_rank"]=s_rank
                     posts_rgn.save(item)
                 posts_rgn.drop_indexes()
@@ -300,20 +342,21 @@ def put_frame_2_db(posts_frm,logger):
         data_ins=item_frm[1]
         data_ins['cap_rank']=s_index
         posts_frm.save(data_ins)
-def put_frame_poi_2_db(posts_newfrm,logger):
-    f_in=open('./beijing_poi.txt','r')
+def put_frame_poi_2_db(filename,posts,logger):
+    f_in=open(filename,'r')
     frm_data={}
-    for line in f_in.readlines():
+    for line in f_in:
         item=line.split('\t')
         data={}
         data['_id']=item[0]
         data['lon']=float(item[2])
         data['lat']=float(item[1])
         data['mileage']=float(item[3])
-        data['poi_num']=float(item[4])
-        data['poi_cap']=float(item[5])
-        data['frm']=item[6].strip('\n')
-        pois=item[7].strip('\n')
+        data['poi_num']=int(round(float(item[4])*float(item[3])/1000))
+        data['poi_cap']=float(item[4])
+        data['pois']=[]
+        data['frm']=item[5].strip('\n')
+        pois=item[6].strip('\n')
         pois_spl=pois.split(';')
         poilst=[]
         if data['poi_num']<1:
@@ -327,13 +370,22 @@ def put_frame_poi_2_db(posts_newfrm,logger):
                 except:
                     pass
         data['pois']=poilst
-        posts_newfrm.save(data)
+        posts.save(data)
     s_rank=0
-    posts_newfrm.create_index([('poi_cap',-1)])
-    for item in posts_newfrm.find().sort([('poi_cap',-1)]):
+    posts.create_index([('poi_cap',-1)])
+    for item in posts.find().sort([('poi_cap',-1)]):
         s_rank+=1
         item['cap_rank']=s_rank
-        posts_newfrm.save(item)
+        a=item['pois']
+        posts.save(item)
+def test_pois_2_db(filename,posts,logger):
+    count=0
+    for item in posts.find():
+        count+=1
+        if item.get('pois','')=='':
+            print item
+            print count
+        
 def put_pdaframe_2_db(posts_pdafrm,posts_pdapoi,logger):
     f_in=open('./PDArgn.csv','r')
     frm_data={}
@@ -422,18 +474,18 @@ def get_city_rank_val_total_2(posts_rk,logger):
         else:
             continue
     return rank_val_total
-def get_city_rank_val_total(posts_rk,logger):
-    f_in=open('rank_type','r')
+def get_city_rank_val_total(posts_frm,posts_rk,logger):
     rank_val_total=0
-    rank_type_list=[]
-    for line in f_in.readlines():
-        item=line.strip('\n')
-        rank_type_list.append(item)
-        smp=posts_rk.find_one({'rank_type_val':str(item)})
+    for item in posts_frm.find():
+        id=item['_id']
+        print 1
+        smp=posts_rk.find_one(GetMD5(id))
+        print 2
         if smp==None:
+            #print smp
             continue
         rank_val_total=smp['city']['total']
-        print rank_val_total
+        #print rank_val_total
         return rank_val_total
         rank_val_total+=int(smp['city_rank_type']['total'])
         print rank_val_total
@@ -467,7 +519,7 @@ def get_rgn_rank_val(poilst,rank_val_total,posts_rk,logger):
         rank+=rank_type_list[item_rank]['rank']*rank_type_list[item_rank]['cnt']/rgn_total/(rank_type_list[item_rank]['city_rank_total']/rank_val_total)/Q
     return rank
         
-def get_region_frame(posts_poi,posts_city,posts_rgn,posts_pr,posts_fr,posts_rk,posts_ur,posts_frm,logger,logger_special):
+def get_region_frame(posts_city,posts_rgn,posts_pr,posts_fr,posts_rk,posts_ur,posts_frm,city,logger):
     city_total_poi_num=0
     city_total_mile_num=0
     city_total_poiinfo_num=0
@@ -512,7 +564,7 @@ def get_region_frame(posts_poi,posts_city,posts_rgn,posts_pr,posts_fr,posts_rk,p
     mlst=[nowym,oneym,twoym,thrym,forym]
     print 'get_total'
     put_time_stamp()
-    rank_val_total=get_city_rank_val_total(posts_rk,logger)
+    rank_val_total=get_city_rank_val_total(posts_frm,posts_rk,logger)
     put_time_stamp()
     print 'start to deal with rgn'
     put_time_stamp()
@@ -536,7 +588,7 @@ def get_region_frame(posts_poi,posts_city,posts_rgn,posts_pr,posts_fr,posts_rk,p
         rst_str=rst_json['result']['poiids']
         poiids=rst_str.split(',')
         '''
-
+        print 'begin:'
         data={}
         data['_id']=item_frm['_id']
         data['lon']=float(item_frm['lon'])
@@ -771,7 +823,7 @@ def get_region_frame(posts_poi,posts_city,posts_rgn,posts_pr,posts_fr,posts_rk,p
             rgn_lvli['freshness']+=rgn_lvli['classify'][type]['freshness']*tmp
             rgn_lvli['prosp']+=rgn_lvli['classify'][type]['prosp']*tmp
         rgn_lvli['importance']=0.7*rgn_lvli['rank']+0.2*rgn_lvli['cap_rank']+0.1*rgn_lvli['prosp']
-        logger_special.info('id:%s   rank:%f    intense_rank:%f    prosp:%f    '%(data['_id'],rgn_lvli['rank'],rgn_lvli['cap_rank'],rgn_lvli['prosp']))
+        #logger_special.info('id:%s   rank:%f    intense_rank:%f    prosp:%f    '%(data['_id'],rgn_lvli['rank'],rgn_lvli['cap_rank'],rgn_lvli['prosp']))
         rgn_lvli['city_rank_val_total']=rank_val_total
         data['info']=rgn_lvli
         data['importance']=rgn_lvli['importance']
@@ -787,7 +839,7 @@ def get_region_frame(posts_poi,posts_city,posts_rgn,posts_pr,posts_fr,posts_rk,p
         posts_rgn.save(data)
         put_time_stamp()
     city_data={}
-    city_data['_id']='beijing'
+    city_data['_id']=city
     city_data['total_poi']=city_total_poi_num
     city_data['total_mile']=city_total_mile_num
     city_data['total_poiinfo']=city_total_poiinfo_num
@@ -799,6 +851,7 @@ def get_region_frame(posts_poi,posts_city,posts_rgn,posts_pr,posts_fr,posts_rk,p
     city_data['total_collection']=city_total_collection_num
     city_data['total_share']=city_total_share_num
     posts_city.save(city_data)
+    logger.info('city:%s'%city)
     
     '''
     city_fresh=0.0

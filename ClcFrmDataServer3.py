@@ -15,9 +15,11 @@ from werkzeug.utils import redirect
 from werkzeug.contrib.sessions import SessionMiddleware
 from werkzeug.wsgi import SharedDataMiddleware
 from werkzeug.contrib.cache import SimpleCache
+from werkzeug.datastructures import Headers
 from jinja2 import Environment, FileSystemLoader
 from pymongo import MongoClient
 import cjson
+import shapefile 
 import xmltodict
 import copy
 import hashlib
@@ -28,7 +30,9 @@ import logging
 import struct
 import datetime
 import json
+import gzip
 rank_val_total=1000000
+count=0
 def Connect2Mongo(ip,port,db,table,user="",pwd=""):
     client = MongoClient(ip,port)
     db = client[db]
@@ -116,7 +120,15 @@ class CrowdsourcingWeb(object):
     def render_pic(self,retContent):
         return Response(retContent,mimetype="image/jpeg");
 
-    
+    def render_gzip_data(self,retContent):
+        h=Response(retContent,mimetype="application/json")
+        h.headers["Content-Encoding"]="gzip"
+        return h
+    def render_gzip(self,retContent,name):
+        h=Response(retContent,mimetype="gzip")
+        h.headers["Content-Encoding"]="gzip"
+        h.headers["Content-Disposition"]="attachment;filename="+name
+        return h
     def on_get_fresh_rank(self,request):
         flag=request.values.get("flag")
         print flag
@@ -435,6 +447,7 @@ class CrowdsourcingWeb(object):
             if id_num==1 and rgn_item!=None:
                 data_back['rank']=rgn_item['info']['rank']
                 data_back['freshness']=rgn_item['info']['freshness']
+                data_back['fresh_rank']=int(rgn_item['fresh_rank'])
                 data_back['poi_num']['rank']=rgn_item['poi_rank']
                 data_back['mileage']['rank']=rgn_item['mile_rank']
                 data_back['importance']['rank']=rgn_item['importance_rank']
@@ -450,6 +463,7 @@ class CrowdsourcingWeb(object):
             else:
                 data_back['freshness']=None
                 data_back['rank']=None
+                data_back['fresh_rank']=None
                 data_back['poi_num']['rank']=None
                 data_back['mileage']['rank']=None
                 data_back['importance']['rank']=None
@@ -725,68 +739,252 @@ class CrowdsourcingWeb(object):
             #data_back={'id':[123],'click':{'chn':'点击量','info':[{'text':'3周','val':24,'rank':2},{'text':'4周','val':24,'rank':2},{'text':'5周','val':24,'rank':2},{'text':'6周','val':24,'rank':2},{'text':'本周','val':24,'rank':2}]},'bus':{'chn':'公交导航','info':[{'text':'3周','val':24,'rank':2},{'text':'4周','val':24,'rank':2},{'text':'5周','val':24,'rank':2},{'text':'6周','val':24,'rank':2},{'text':'本周','val':24,'rank':2}]},'drive':{'chn':'汽车导航','info':[{'text':'3周','val':24,'rank':2},{'text':'4周','val':24,'rank':2},{'text':'5周','val':24,'rank':2},{'text':'6周','val':24,'rank':2},{'text':'本周','val':24,'rank':2}]},'search':{'chn':'搜索量','info':[{'text':'3周','val':24,'rank':2},{'text':'4周','val':24,'rank':2},{'text':'5周','val':24,'rank':2},{'text':'6周','val':24,'rank':2},{'text':'本周','val':24,'rank':2}]}}
             data_back_json=json.dumps(userbh,ensure_ascii=False).encode('utf-8','ignore')
             return self.render_content(data_back_json)
-        '''
-        cls_num=[]
-        total_num=[]
-        fresh_level=[]
-        city_cls_num=[]
-        city_total_num=
-        
-        Q=0.0
-        for i in range(type_num):
-            Q+=cls_num[i]/total_num[i]/(city_cls_num[i]/city_total_num)
-        zone_fresh=0.0
-        for i in range(type_num):
-            zone_fresh+=fresh_level[i]*cls_num[i]/total_num[i]/(city_cls_num[i]/city_total_num)/Q
-            
-        if nation_poi_num/rnk_num[i]>=10:
-            rnk[i]=(1-(rnk_raw-1)/float(nation_poi_num))*100
-        else:
-            rnk[i]=(1-(rnk_raw-1)/float(nation_poi_num-rnk_num[i]))*100
-        
-        zone_rank=0.0
-        for i in range(type_num):
-            zone_rank+=rnk[i]*cls_num[i]/total_num[i]/(city_cls_num[i]/city_total_num)/Q
-        '''
-        return self.render_content("Hello Work!")
-        '''
-        f_in=open("region_level_1",'r')
-        
-        data_back='['
-        lon=request.values.get("lon")
-        cb=request.values.get("cb")
-        lat=request.values.get("lat")
-        dbflag=request.values.get("dbflag")
-        self.logger5.info("get Suc")
-        self.logger5.info("lon:%s   lat:%s    "%(lon,lat))
-        #client,db,posts = Connect2Mongo("localhost",27017,"drawFrame","raw_frame")
-        client3,db3,posts3 = Connect2Mongo("localhost",27017,"drawFrame","raw_frame_test")
-        client2,db2,posts2=Connect2Mongo('localhost',27017,'drawFrame','bj_frame_test')
-        #frm_data=posts.find({"$and":[{"lon":{"$gte":float(lon)-0.025,"$lte":float(lon)+0.025}},{"lat":{"$gte":float(lat)-0.025,"$lte":float(lat)+0.025}}]})
-        #for item in frm_data:
-        if dbflag=='raw':
-            #frm_data=posts3.find({"$and":[{"lon":{"$gte":float(lon)-0.025,"$lte":float(lon)+0.025}},{"lat":{"$gte":float(lat)-0.025,"$lte":float(lat)+0.025}}]})
-            for item in posts3.find():
-            #for item in frm_data:
-                data_back+=json.dumps(item['data'],ensure_ascii=False).encode('utf-8','ignore')
-                data_back+=','
-        if dbflag=='bj':
-            #frm_data=posts2.find({"$and":[{"lon":{"$gte":float(lon)-0.025,"$lte":float(lon)+0.025}},{"lat":{"$gte":float(lat)-0.025,"$lte":float(lat)+0.025}}]})
-            for item in posts2.find():
-            #for item in frm_data:
-                data_back+=json.dumps(item['data'],ensure_ascii=False).encode('utf-8','ignore')
-                data_back+=','
-        data_back=data_back[:-1]+']'
-        for line in f_in.readlines():
-            item=json.loads(line)
-            if item[1][0]>float(lon2):
-                break
-            #if item[1][0]>116.400285 and item[1][1] >39.903458 and item[1][0]<116.407796 and item[1][1] <39.907228:
-            if item[1][0]>float(lon) and item[1][1] >float(lat) and item[1][0]<float(lon2) and item[1][1] <float(lat2):
-                #data_back+=json.dumps(item,ensure_ascii=False).encode('utf-8','ignore')  
-                data_back+=line                
-        return self.render_content(cb +"&&"+cb+"("+ data_back+")")
-        '''
+        if flag=='select':
+            try:
+                client_city,db_city,posts_city = Connect2Mongo("localhost", 27017,"collect_frame","city_statistic")
+            except:
+                client_city.disconnect()
+                logger.error("connect 2 mongodb failed.")
+                return
+            try:
+                client_newrgn,db_newrgn,posts_newrgn = Connect2Mongo("localhost", 27017,"collect_frame","newregion_info")
+            except:
+                client_newrgn.disconnect()
+                logger.error("connect 2 mongodb failed.")
+                return
+            cont=['freshness','prosp','poi_cap','importance','poi_num','mileage','bus','drive','collection','share','error','poi_info','group','search']
+            cont_rank=['fresh_rank','prosp_rank','cap_rank','importance_rank','poi_rank','mile_rank','busm1_rank','drivem1_rank','collectionm1_rank','sharem1_rank','errorm1_rank','poi_infom1_rank','groupm1_rank','searchm1_rank']
+            city_data=posts_city.find_one({'_id':'beijing'})
+            cont_total=['','','','',city_data['total_poi'],city_data['total_mile'],city_data['total_bus'],city_data['total_drive'],city_data['total_collection'],city_data['total_share'],city_data['total_error'],city_data['total_poiinfo'],city_data['total_group'],city_data['total_search']]
+            sel_lst=[]
+            for c in cont:
+                itm=request.values.get(c)
+                if itm==None:
+                    continue
+                itm_lst=itm.split(',')
+                if cont.index(c)>(len(cont)-9):
+                    i=c+'m1_num'
+                else:
+                    i=c
+                if itm_lst[0]=='' or itm_lst[1]=='':
+                    pass
+                else:
+                    sel_itm={}
+                    sel_itm[i]={}
+                    sel_itm[i]["$gte"]=float(itm_lst[0])
+                    sel_itm[i]["$lte"]=float(itm_lst[1])
+                    sel_lst.append(sel_itm)
+                    
+                if itm_lst[2]=='' or itm_lst[3]=='':
+                    pass
+                else:
+                    sel_itm={}
+                    sel_itm['acu_'+c]={}
+                    if cont_total[cont.index(c)]=='':
+                        pass
+                    else:
+                        sel_itm['acu_'+c]["$gte"]=float(itm_lst[2])*cont_total[cont.index(c)]/100
+                        sel_itm['acu_'+c]["$lte"]=float(itm_lst[3])*cont_total[cont.index(c)]/100
+                        sel_lst.append(sel_itm)
+                    
+                if itm_lst[4]=='' or itm_lst[5]=='':
+                    pass
+                else:
+                    sel_itm={}
+                    sel_itm[cont_rank[cont.index(c)]]={}
+                    sel_itm[cont_rank[cont.index(c)]]["$gte"]=float(itm_lst[4])
+                    sel_itm[cont_rank[cont.index(c)]]["$lte"]=float(itm_lst[5])
+                    sel_lst.append(sel_itm)
+                
+                if len(itm_lst)>6:
+                    if itm_lst[6]=='' or itm_lst[7]=='':
+                        pass
+                    else:
+                        sel_itm={}
+                        sel_itm[cont_rank[cont.index(c)]]={}
+                        sel_itm[cont_rank[cont.index(c)]]["$gte"]=float(itm_lst[6])*cont_total[cont.index(c)]/100
+                        sel_itm[cont_rank[cont.index(c)]]["$lte"]=float(itm_lst[7])*cont_total[cont.index(c)]/100
+                        sel_lst.append(sel_itm)
+            frm_data=posts_newrgn.find({"$and":sel_lst})
+            #frm_data=posts_pdargn.find({"$and":[{"lon":{"$gte":lon1,"$lte":lon2}},{"lat":{"$gte":lat1,"$lte":lat2}}]})
+            data_back=[]
+            count=0
+            frm_num=posts_newrgn.count()
+            city_data=posts_city.find_one({'_id':'beijing'})
+            for frm in frm_data:
+                data_rgn={}
+                data_rgn['id']=frm['_id']
+                frm_str=frm['frm']
+                frm_lst=frm_str.split('|')
+                dots=[]
+                for item in frm_lst:
+                    dot_spl=item.split(',')
+                    dots.append([float(dot_spl[0]),float(dot_spl[1])])
+                data_rgn['dots']=dots
+                data_rgn['freshness']={}
+                try:
+                    data_rgn['freshness']['val']=frm['freshness']
+                    data_rgn['freshness']['rank']=frm['fresh_rank']
+                except:
+                    data_rgn['freshness']['val']=0
+                    data_rgn['freshness']['rank']=2188
+                data_rgn['freshness']['hot']=(1-float(frm['fresh_rank']-1)/frm_num)*100
+                data_rgn['lon']=frm['lon']
+                data_rgn['lat']=frm['lat']
+                data_rgn['poi_num']={}
+                data_rgn['poi_num']['val']=frm['poi_num']
+                data_rgn['poi_num']['proportion']=round(float(frm['poi_num'])/city_data['total_poi'],2)
+                data_rgn['poi_num']['rank']=frm['poi_rank']
+                data_rgn['poi_num']['hot']=(1-float(frm['poi_rank']-1)/frm_num)*100
+                data_rgn['poi_cap']={}
+                data_rgn['poi_cap']['val']=frm['poi_cap']
+                data_rgn['poi_cap']['rank']=frm['cap_rank']
+                data_rgn['poi_cap']['hot']=(1-float(frm['cap_rank']-1)/frm_num)*100
+                data_rgn['mileage']={}
+                data_rgn['mileage']['val']=frm['mileage']
+                data_rgn['mileage']['proportion']=round(float(frm['mileage'])/city_data['total_mile'])
+                data_rgn['mileage']['rank']=frm['mile_rank']
+                data_rgn['mileage']['hot']=(1-float(frm['mile_rank']-1)/frm_num)*100
+                data_rgn['prosp']={}
+                try:
+                    data_rgn['prosp']['val']=frm['prosp']
+                    data_rgn['prosp']['rank']=frm['prosp_rank']
+                except:
+                    data_rgn['prosp']['val']=0
+                    data_rgn['prosp']['rank']=2188
+                data_rgn['prosp']['hot']=(1-float(frm['prosp_rank']-1)/frm_num)*100
+                data_rgn['importance']={}
+                data_rgn['importance']['val']=frm['importance']
+                data_rgn['importance']['rank']=frm['importance_rank']
+                data_rgn['importance']['hot']=(1-float(frm['importance_rank']-1)/frm_num)*100
+                data_rgn['pos_hot']={}
+                data_rgn['pos_hot']['val']=0
+                data_rgn['pos_hot']['rank']=0
+                data_rgn['pos_hot']['proportion']=0
+                data_rgn['rgn_chg']={}
+                data_rgn['rgn_chg']['val']=0
+                data_rgn['rgn_chg']['rank']=0
+                cont=['bus','drive','search','poi_info','share','error','collection','group']
+                for c in cont:
+                    data_rgn[c]={}
+                    try:
+                        data_rgn[c]['rank']=frm[c+'m1_rank']
+                    except:
+                        data_rgn[c]['rank']=0
+                    data_rgn[c]['val']=int(frm[c+'_num']['m'][1])
+                    data_rgn[c]['hot']=(1-float(frm[c+'m1_rank']-1)/frm_num)*100
+                    try:
+                        data_rgn[c]['proportion']=float(frm[c+'_num']['m'][1])/city_data['total_'+c]
+                    except:
+                        data_rgn[c]['proportion']=0
+                data_back.append(data_rgn)
+            data_back_json=json.dumps(data_back,ensure_ascii=False).encode('utf-8','ignore')
+            g=gzip.GzipFile(filename='cmprs_data.gz', mode='wb',fileobj=open('cmprs_data.gz','wb'))
+            g.write(data_back_json)
+            g.close()
+            f_in=open('cmprs_data.gz','r')
+            ret_con=f_in.read()
+            return self.render_gzip_data(ret_con)
+        if flag=='getfile':
+            scale=request.values.get("scale")
+            if scale==None:
+                return self.render_content('{"status":"failed","err_code":501,"reason":"range format error"}')
+            try:
+                client_newrgn,db_newrgn,posts_newrgn = Connect2Mongo("localhost", 27017,"collect_frame","newregion_info")
+            except:
+                client_newrgn.disconnect()
+                logger.error("connect 2 mongodb failed.")
+                return
+            try:
+                client_city,db_city,posts_city = Connect2Mongo("localhost", 27017,"collect_frame","city_statistic")
+            except:
+                client_city.disconnect()
+                logger.error("connect 2 mongodb failed.")
+                return
+            city_info=posts_city.find_one({'_id':'beijing'})
+            if scale=='sel':
+                id_str=request.values.get("id")
+                if id_str==None:
+                    return self.render_content('{"status":"failed","err_code":502,"reason":"There is no id"}')
+                id_lst=id_str.split(',')
+                w = shapefile.Writer()
+                w.autoBalance = 1
+                w = shapefile.Writer(shapefile.POLYGON)
+                w.field('id','C','40')
+                w.field('name','C','40')
+                w.field('poi_pro','C','20')
+                w.field('poi_rank','C','20')
+                w.field('mile_pro','C','20')
+                w.field('mile_rank','C','20')
+                w.field('cap_rank','C','20')
+                w.field('impt_rank','C','20')
+                w.field('fresh_rank','C','20')
+                w.field('prosp_rank','C','20')
+                w.field('p_info_pro','C','20')
+                w.field('p_info_rank','C','20')
+                w.field('search_pro','C','20')
+                w.field('search_rank','C','20')
+                w.field('drive_pro','C','20')
+                w.field('drive_rank','C','20')
+                w.field('bus_pro','C','20')
+                w.field('bus_rank','C','20')
+                w.field('group_pro','C','20')
+                w.field('group_rank','C','20')
+                w.field('clc_pro','C','20')
+                w.field('clc_rank','C','20')
+                w.field('error_pro','C','20')
+                w.field('error_rank','C','20')
+                w.field('share_pro','C','20')
+                w.field('share_rank','C','20')
+                for id in id_lst:
+                    polygon_dots=[]
+                    item=posts_newrgn.find_one({'_id':id})
+                    data={}
+                    data['id']=item['_id']
+                    data['name']='null'
+                    data['poi_pro']=str(float(item['poi_num'])/city_info['total_poi'])
+                    data['poi_rank']=str(item['poi_rank'])
+                    data['mile_pro']=str(float(item['mileage'])/city_info['total_mile'])
+                    data['mile_rank']=str(item['mile_rank'])
+                    data['cap_rank']=str(item['cap_rank'])
+                    data['importance_rank']=str(item['importance_rank'])
+                    data['fresh_rank']=str(item['fresh_rank'])
+                    data['prosp_rank']=str(item['prosp_rank'])
+                    data['poi_info_pro']=str(float(item['poi_info_num']['m'][1])/city_info['total_poiinfo'])
+                    data['poi_info_rank']=str(item['poi_infom1_rank'])
+                    data['search_pro']=str(float(item['search_num']['m'][1])/city_info['total_search'])
+                    data['search_rank']=str(item['searchm1_rank'])
+                    data['drive_pro']=str(float(item['drive_num']['m'][1])/city_info['total_drive'])
+                    data['drive_rank']=str(item['drivem1_rank'])
+                    data['bus_pro']=str(float(item['bus_num']['m'][1])/city_info['total_bus'])
+                    data['bus_rank']=str(item['busm1_rank'])
+                    data['group_pro']=str(float(item['group_num']['m'][1])/city_info['total_group'])
+                    data['group_rank']=str(item['groupm1_rank'])
+                    data['collection_pro']='0'#str(float(item['collection_num']['m'][1])/city_info['total_collection'])
+                    data['collection_rank']='0'#str(item['collectionm1_rank'])
+                    data['error_pro']='0'#str(float(item['error_num']['m'][1])/city_info['total_error'])
+                    data['error_rank']='0'#str(item['errorm1_rank'])
+                    data['share_pro']='0'#str(float(item['share_num']['m'][1])/city_info['total_share'])
+                    data['share_rank']='0'#str(item['sharem1_rank'])
+                    frm=item['frm']
+                    frm_spl=frm.split('|')
+                    for frm_itm in frm_spl:
+                        polygon_dots.append([float(frm_itm.split(',')[0]),float(frm_itm.split(',')[1])])
+                    w.poly(parts=[polygon_dots])
+                    w.record(data['id'],data['name'],data['poi_pro'],data['poi_rank'],data['mile_pro'],data['mile_rank'],data['cap_rank'],data['importance_rank'],data['fresh_rank'],data['prosp_rank'],data['poi_info_pro'],data['poi_info_rank'],data['search_pro'],data['search_rank'],data['drive_pro'],data['drive_rank'],data['bus_pro'],data['bus_rank'],data['group_pro'],data['group_rank'],data['collection_pro'],data['collection_rank'],data['error_pro'],data['error_rank'],data['share_pro'],data['share_rank'])
+                w.save('./shp_data/shp_file.shp')
+                os.system('tar cvf selected_shp_pack.tar shp_data')
+                f_in=open('selected_shp_pack.tar','r')
+                ret_con=f_in.read()
+                f_in.close()
+                #return self.render_content(ret_con)
+                return self.render_gzip(ret_con,'sel_shp.gz')
+            if scale=='city':
+                f_in=open('bj_shp_pack.tar','r')
+                ret_con=f_in.read()
+                f_in.close()
+                #return self.render_content(ret_con)
+                return self.render_gzip(ret_con,'bj_shp.gz')
                 
 
     

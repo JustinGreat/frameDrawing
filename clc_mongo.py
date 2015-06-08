@@ -146,23 +146,57 @@ def RemoveData():
     print posts.count()
     client.disconnect()
     
+FRESHNESS_IP='10.16.41.16'
+USER_BEHAVIOR_IP='10.16.41.16'
+RANK_IP='10.16.41.16'
+PROSP_IP='localhost'
+FRM_IP='localhost'
+MONGO_PORT=27017
+DATA_BASE='cms_resume'
+USER='jianchao.jjc'
+PASSWD='jianchao.jjc.123'
 def Test1():
     client,db,posts = Connect2Mongo("localhost",27017,'cms_resume','cms_poi_prosp')
-    print posts.count()
-    count1=0
-    count2=0
+    print 'fanhua:%d'%posts.count()
     client2,db2,posts2 = Connect2Mongo("localhost",27017,'cms_resume','frm_table')
-    print posts2.count()
+    print 'raw frame:%d'%posts2.count()
     client3,db3,posts3 = Connect2Mongo("localhost",27017,"collect_frame","region_info")
-    print posts3.count()
+    print 'region :%d'%posts3.count()
+    '''
+    count=0
+    for i in posts3.find():
+        if count==3:
+            print i
+        count+=1
+    '''
     client_poi,db_poi,posts_poi = Connect2Mongo("localhost", 27017,"collect_frame","rgn_poi")
-    print posts_poi.count()
+    print 'region with poi:%d'%posts_poi.count()
     client_pdafrm,db_pdafrm,posts_pdafrm = Connect2Mongo("localhost",27017,'cms_resume',"pdafrm_table")
-    print posts_pdafrm.count()
+    print 'pda frame:%d'%posts_pdafrm.count()
     client_pdapoi,db_pdapoi,posts_pdapoi = Connect2Mongo("localhost", 27017,"collect_frame","rgn_pdapoi")
-    print posts_pdapoi.count()
+    print 'pda regions with pois: %d'%posts_pdapoi.count()
     client_pdargn,db_pdargn,posts_pdargn = Connect2Mongo("localhost", 27017,"collect_frame","pdaregion_info")
-    print posts_pdargn.count()
+    print 'pda regions:%d'%posts_pdargn.count()
+    client_rk,db_rk,posts_rk = Connect2Mongo(RANK_IP,MONGO_PORT,DATA_BASE,"cms_poi_rank",USER,PASSWD)
+    print 'rank:%d'%posts_rk.count()
+    client_fr,db_fr,posts_fr = Connect2Mongo(FRESHNESS_IP,MONGO_PORT,DATA_BASE,"cms_poi_freshness",USER,PASSWD)
+    print 'freshness:%d'%posts_fr.count()
+    client_cityur,db_cityur,posts_cityur = Connect2Mongo(USER_BEHAVIOR_IP,MONGO_PORT,DATA_BASE,"pv_stat_city",USER,PASSWD)
+    print 'user behavior:%d'%posts_cityur.count()
+    client_prov,db_prov,posts_prov = Connect2Mongo('localhost',27017,'nation',"prov_data")
+    print 'province :%d'%posts_prov.count()
+    client_city,db_city,posts_city = Connect2Mongo('localhost',27017,'nation',"city_data")
+    print 'city :%d'%posts_city.count()
+    client_newfrm,db_newfrm,posts_newfrm = Connect2Mongo(FRM_IP,MONGO_PORT,'formal',"newfrm_table")
+    print 'newfrm:%d'%posts_newfrm.count()
+    client_newrgn,db_newrgn,posts_newrgn = Connect2Mongo("localhost", 27017,"collect_frame","newregion_info")
+    print 'newrgn:%d'%posts_newrgn.count()
+    count=0
+    for i in range(100000,180000):
+        city=str(i)
+        filename='aoi/'+city+'_aoi.csv'
+        if os.path.exists(filename)==True:
+            print filename
 def Test1_t():
     AddData2MongoTest()
 def Test2():
