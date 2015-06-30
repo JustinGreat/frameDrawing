@@ -34,6 +34,9 @@ import gzip
 NUM_MONTH=18
 NUM_Q=6
 NUM_HY=3
+NUM_S_MONTH=13
+NUM_S_Q=5
+NUM_S_HY=3
 rgnTypeList={'roadgrid':'PDA+路网'}
 def Connect2Mongo(ip,port,db,table,user="",pwd=""):
     client = MongoClient(ip,port)
@@ -62,6 +65,14 @@ class CrowdsourcingWeb(object):
         self.logger1 = InitLog('./log/clc_info_%s.log'%server_no)
         self.CODE_CHN_TABLE={'01':'汽车服务','02':'汽车销售','03':'汽车维修','04':'摩托车服务','05':'餐饮服务','06':'购物服务','07':'生活服务','08':'体育休闲服务','09':'医疗保健服务','10':'住宿服务','11':'风景名胜','12':'商务住宅','13':'政府机构及社会团体','14':'科教文化服务','15':'交通设施服务','16':'金融保险服务','17':'公司企业','18':'道路附属设施','19':'地名地址信息','20':'公共设施','22':'事件活动','97':'室内设施','99':'通行设施'}
         self.date_map={}
+        client_city,db_city,posts_city = Connect2Mongo("localhost", 27017,'roadgrid',"city")
+        city_data=posts_city.find_one({'_id':'110000'})
+        for i in range(1,13):
+            self.date_map['m'+str(i)]=city_data['month_list'][i]
+        for i in range(1,5):
+            self.date_map['q'+str(i)]=city_data['qter_list'][i]
+        for i in range(1,3):
+            self.date_map['hy'+str(i)]=city_data['hy_list'][i]
     def __call__(self, environ, start_response):
         return self.wsgi_app(environ, start_response)
 
@@ -108,11 +119,6 @@ class CrowdsourcingWeb(object):
         rgnType=request.values.get("rgnType")
         adcode=request.values.get("adcode")
         tm=request.values.get("timespan")
-        if tm=='' or tm==None:
-            tm='m1'
-        else:
-            f_out=open('./src/tmp','w')
-            f_out.write(tm)
         sel_city=adcode
         if flag=='init':
             data={}
@@ -165,10 +171,10 @@ class CrowdsourcingWeb(object):
                 city_info['datelst']['m'].append({'val':'m'+str(i),'name':city_data['month_list'][i]})
                 self.date_map['m'+str(i)]=city_data['month_list'][i]
             for i in range(1,5):
-                city_info['datelst']['q'].append({'val':'q'+str(i),'name':city_data['qter_list'][i]})
+                city_info['datelst']['q'].append({'val':'q'+str(i),'name':city_data['qter_list'][i][:4]+'q'+city_data['qter_list'][i][5]})
                 self.date_map['q'+str(i)]=city_data['qter_list'][i]
             for i in range(1,3):
-                city_info['datelst']['hy'].append({'val':'hy'+str(i),'name':city_data['hy_list'][i]})
+                city_info['datelst']['hy'].append({'val':'hy'+str(i),'name':city_data['hy_list'][i][:4]+'hy'+city_data['hy_list'][i][5]})
                 self.date_map['hy'+str(i)]=city_data['hy_list'][i]
             city_info['type']={}
             for type in city_data['classify']:
@@ -188,7 +194,7 @@ class CrowdsourcingWeb(object):
             client_city,db_city,posts_city = Connect2Mongo("localhost", 27017,rgnType,"city")
             rangell=request.values.get("range")
             if rangell=='':
-                return self.render_content('{status:failed,err_code:201,reason:there is no range in the request}')
+                return self.render_content('{"status":"failed","err_code":201,"reason":"there is no range in the request"}')
             rangelst=rangell.split(',')
             lon1=float(rangelst[0])
             lat1=float(rangelst[1])
@@ -201,6 +207,14 @@ class CrowdsourcingWeb(object):
             city_data=posts_city.find_one({'_id':sel_city})
             for frm in posts.find({"$and":[{"lon":{"$gte":lon1,"$lte":lon2}},{"lat":{"$gte":lat1,"$lte":lat2}}]}):
                 frm['id']=frm['_id']
+                frm['rgn_chg1']={}
+                frm['rgn_chg1']['val']=0.1
+                frm['rgn_chg1']['rank']=200
+                frm['rgn_chg1']['hot']=50
+                frm['rgn_chg2']={}
+                frm['rgn_chg2']['val']=0.2
+                frm['rgn_chg2']['rank']=100
+                frm['rgn_chg2']['hot']=100
                 data_back.append(frm)
             data_back_json=json.dumps(data_back,ensure_ascii=False).encode('utf-8','ignore')
             return self.render_content(data_back_json)
@@ -217,7 +231,7 @@ class CrowdsourcingWeb(object):
             data_back['type']={}
             multirgn['id']=id_lst
             multirgn['poi_num']=0
-            multirgn['mileage']=0
+            multirgn['mileage']=0.0
             multirgn['poi_info']=0.0
             multirgn['bus']=0.0
             multirgn['search']=0.0
@@ -282,7 +296,7 @@ class CrowdsourcingWeb(object):
             data_back['mileage']={}
             data_back['mileage']['val']=round(float(multirgn['mileage'])/1000.0,2)
             try:
-                data_back['mileage']['proportion']=round(float(multirgn['mileage'])/1000.0/city_mile_num*100,2)
+                data_back['mileage']['proportion']=round(float(multirgn['mileage'])/city_mile_num*100,2)
             except:
                 data_back['mileage']['proportion']=0
             data_back['intence']={}
@@ -391,7 +405,7 @@ class CrowdsourcingWeb(object):
             id_lst=id_str.split(',')
             id_num=len(id_lst)
             client,db,posts = Connect2Mongo("localhost", 27017,rgnType,sel_city)
-            cont=['bus','drive','search','poi_info','share','error','collection','group']
+            cont=['bus','drive','search','poi_info','share','error','collection','group','rgn_chg1','rgn_chg2']
             userbh={}
             userbh['id']=id_lst
             for c in cont:
@@ -406,16 +420,16 @@ class CrowdsourcingWeb(object):
                     return self.render_content('{"status":"failed","err_code":402,"reason":"there is no user behavior info"}')
                 for c in cont:
                     for i in range(1,13):
-                        userbh[c]['info']['m'][i-1]['val']+=user_item[c+'m'+str(13-i)]
-                        userbh[c]['info']['m'][i-1]['rank']=user_item[c+'m'+str(13-i)+'_rank']
+                        userbh[c]['info']['m'][i-1]['val']+=user_item.get(c+'m'+str(13-i),0)
+                        userbh[c]['info']['m'][i-1]['rank']=user_item.get(c+'m'+str(13-i)+'_rank',0)
                         userbh[c]['info']['m'][i-1]['text']=user_item['month_list'][13-i][-2:]
                     for i in range(1,5):
-                        userbh[c]['info']['q'][i-1]['val']+=user_item[c+'q'+str(5-i)]
-                        userbh[c]['info']['q'][i-1]['rank']=user_item[c+'q'+str(5-i)+'_rank']
+                        userbh[c]['info']['q'][i-1]['val']+=user_item.get(c+'q'+str(5-i),0)
+                        userbh[c]['info']['q'][i-1]['rank']=user_item.get(c+'q'+str(5-i)+'_rank',0)
                         userbh[c]['info']['q'][i-1]['text']=user_item['qter_list'][5-i][-2:]
                     for i in range(1,3):
-                        userbh[c]['info']['hy'][i-1]['val']+=user_item[c+'hy'+str(3-i)]
-                        userbh[c]['info']['hy'][i-1]['rank']=user_item[c+'hy'+str(3-i)+'_rank']
+                        userbh[c]['info']['hy'][i-1]['val']+=user_item.get(c+'hy'+str(3-i),0)
+                        userbh[c]['info']['hy'][i-1]['rank']=user_item.get(c+'hy'+str(3-i)+'_rank',0)
                         userbh[c]['info']['hy'][i-1]['text']=user_item['hy_list'][3-i][-2:]
             userbh['bus']['chn']='公交导航'
             userbh['drive']['chn']='汽车导航'
@@ -425,6 +439,8 @@ class CrowdsourcingWeb(object):
             userbh['collection']['chn']='收藏'
             userbh['group']['chn']='团购'
             userbh['error']['chn']='报错'
+            userbh['rgn_chg1']['chn']='变化率1'
+            userbh['rgn_chg2']['chn']='变化率2'
             '''
             if user_item.get('rgn_chgm12','')=='': 
                 for i in range(12):
@@ -440,11 +456,14 @@ class CrowdsourcingWeb(object):
         if flag=='select':
             client_city,db_city,posts_city = Connect2Mongo("localhost", 27017,rgnType,"city")
             client,db,posts = Connect2Mongo("localhost", 27017,rgnType,sel_city)
-            cont=['mileage','poi_num','freshness','prosp','importance']
+            cont=['mileage','poi_num','poi_cap','freshness','prosp','importance']
             u_cont=['bus','share','drive','collection','error','group','search','poi_info']
             cont_rank=[]
             for c in cont:
-                cont_rank.append(c+'_rank')
+                if c=='poi_cap':
+                    cont_rank.append('cap_rank')
+                else:
+                    cont_rank.append(c+'_rank')
             for u in u_cont:
                 cont.append(u)
                 cont_rank.append(u+tm+'_rank')
@@ -473,16 +492,17 @@ class CrowdsourcingWeb(object):
                     pass
                 else:
                     sel_itm={}
-                    if cont.index(c)>(len(cont)-len(u_cont)-1) or cont.index(c)<2:
+
+                    if cont.index(c)>(len(cont)-len(u_cont)-1) :#or cont.index(c)<2:
                         nm='acu_'+c+tm
                     else:
                         nm='acu_'+c
                     sel_itm[nm]={}
-                    if city_data[c+tm]==0:
+                    if city_data[c]==0:
                         pass
                     else:
-                        sel_itm[nm]["$gte"]=float(itm_lst[2])*city_data[c+tm]/100
-                        sel_itm[nm]["$lte"]=float(itm_lst[3])*city_data[c+tm]/100
+                        sel_itm[nm]["$gte"]=float(itm_lst[2])*city_data[c]/100
+                        sel_itm[nm]["$lte"]=float(itm_lst[3])*city_data[c]/100
                         sel_lst.append(sel_itm)
                     
                 if itm_lst[4]=='' or itm_lst[5]=='':
@@ -559,6 +579,8 @@ class CrowdsourcingWeb(object):
                     if frm.get(c+tm,'')=='':
                         data_rgn[c]['val']=0
                         data_rgn[c]['rank']=0
+                        data_rgn[c]['hot']=0
+                        continue
                     try:
                         data_rgn[c]['rank']=frm[c+tm+'_rank']
                     except:
@@ -700,10 +722,6 @@ class CrowdsourcingWeb(object):
                 #return self.render_content(ret_con)
                 return self.render_gzip(ret_con,'sel_shp_'+adcode+'_'+rgnType+'_'+self.date_map[tm]+tm[0]+'.gz')
             if scale=='city':
-                f_in=open('./src/tmp','r')
-                tm=f_in.read()
-                if tm=='':
-                    tm='m1'
                 if True==os.path.exists('./shp_files/city_shp_'+adcode+'_'+rgnType+'_'+self.date_map[tm]+tm[0]+'.tar'):
                     f_in=open('./shp_files/city_shp_'+adcode+'_'+rgnType+'_'+self.date_map[tm]+tm[0]+'.tar','r')
                     ret_con=f_in.read()

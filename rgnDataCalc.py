@@ -144,7 +144,7 @@ def Start(filename,num):
         logger.error("connect 2 mongodb failed.")
         return
     logger.info("connect 2 mongodb success")
- 
+
     code=put_frame_poi_2_db(filename,posts_tmpfrm,logger)
     if code==ERROR:
         logger.error('Putting file data into frm_db met error')
@@ -187,6 +187,7 @@ def Start(filename,num):
             return ERROR
         else:
             logger.info("Organizing DB was OK")
+
     return RIGHT
 
 def org_db(posts_s,posts_d,posts_city,city,tm,logger):
@@ -245,6 +246,7 @@ def org_db(posts_s,posts_d,posts_city,city,tm,logger):
         if frm.get('rgn_chg1','')=='':
             data_rgn['rgn_chg1']['val']=0
             data_rgn['rgn_chg1']['rank']=0
+            data_rgn['rgn_chg1']['hot']=0
         else:
             data_rgn['rgn_chg1']['val']=frm['rgn_chg1'+tm]*100
             data_rgn['rgn_chg1']['rank']=frm['rgn_chg1'+tm+'_rank']
@@ -252,6 +254,7 @@ def org_db(posts_s,posts_d,posts_city,city,tm,logger):
         if frm.get('rgn_chg2','')=='':
             data_rgn['rgn_chg2']['val']=0
             data_rgn['rgn_chg2']['rank']=0
+            data_rgn['rgn_chg2']['hot']=0
         else:
             data_rgn['rgn_chg2']['val']=frm['rgn_chg2'+tm]*100
             data_rgn['rgn_chg2']['rank']=frm['rgn_chg2'+tm+'_rank']
